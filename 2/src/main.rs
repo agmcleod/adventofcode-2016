@@ -9,7 +9,7 @@ fn read_text() -> Result<String> {
   Ok(text)
 }
 
-fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &[[&str; 3]; 3]) -> ([i16; 2], String) {
+fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &Vec<Vec<&str>>) -> ([i16; 2], String) {
     let mut result = [start_pos[0], start_pos[1]];
 
     for command in commands {
@@ -51,25 +51,11 @@ fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &[[&s
     return (result, String::from(grid[result[1] as usize][result[0] as usize]))
 }
 
-fn main() {
-    let text = match read_text() {
-        Ok(text) => text,
-        Err(err) => panic!("{:?}", err),
-    };
-
-    let grid = [
-        ["1", "2", "3"],
-        ["4", "5", "6"],
-        ["7", "8", "9"]
-    ];
-
-    let mut start_pos = [1, 1];
-
+fn solve_for_grid(start_pos: &mut [i16; 2], grid: &Vec<Vec<&str>>, commands: &Vec<&str>) {
     let mut codes = Vec::<String>::new();
 
-    let lines: Vec<&str> = text.split("\n").collect();
-    for line in lines {
-        if line == "" {
+    for line in commands {
+        if *line == "" {
             continue
         }
         let commands: Vec<&str> = line.split("").collect();
@@ -81,4 +67,22 @@ fn main() {
     }
 
     println!("{}", codes.join(""));
+}
+
+fn main() {
+    let text = match read_text() {
+        Ok(text) => text,
+        Err(err) => panic!("{:?}", err),
+    };
+
+    let grid = vec![
+        vec!["1", "2", "3"],
+        vec!["4", "5", "6"],
+        vec!["7", "8", "9"]
+    ];
+
+    let mut start_pos = [1, 1];
+
+    let lines: Vec<&str> = text.split("\n").collect();
+    solve_for_grid(&mut start_pos, &grid, &lines);
 }
