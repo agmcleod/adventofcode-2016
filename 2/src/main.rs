@@ -1,13 +1,4 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::Result;
-
-fn read_text() -> Result<String> {
-  let mut text = String::new();
-  let mut file = try!(File::open("input.txt"));
-  try!(file.read_to_string(&mut text));
-  Ok(text)
-}
+extern crate read_input;
 
 fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &Vec<Vec<&str>>) -> ([i16; 2], String) {
     let mut result = [start_pos[0], start_pos[1]];
@@ -69,7 +60,7 @@ fn solve_for_grid(start_pos: &mut [i16; 2], grid: &Vec<Vec<&str>>, commands: &Ve
 }
 
 fn main() {
-    let text = match read_text() {
+    let text = match read_input::read_text("input.txt") {
         Ok(text) => text,
         Err(err) => panic!("{:?}", err),
     };

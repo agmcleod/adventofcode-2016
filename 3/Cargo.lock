@@ -1,5 +1,5 @@
 [root]
-name = "1"
+name = "3"
 version = "0.1.0"
 dependencies = [
  "read_input 0.1.0",

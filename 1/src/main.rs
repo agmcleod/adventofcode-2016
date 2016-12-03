@@ -1,6 +1,5 @@
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::Result;
+extern crate read_input;
+
 use std::collections::HashMap;
 
 enum Direction {
@@ -59,18 +58,11 @@ fn print_dupe_coords(x: i16, y: i16) {
     println!("already crossed: {} {} = {}", x.abs(), y.abs(), x.abs() + y.abs());
 }
 
-fn read_text() -> Result<String> {
-  let mut text = String::new();
-  let mut file = try!(File::open("input.txt"));
-  try!(file.read_to_string(&mut text));
-  Ok(text)
-}
-
 fn main() {
     let mut positions = HashMap::new();
     let mut found_dupe_pos = false;
 
-    match read_text() {
+    match read_input::read_text("input.txt") {
         Ok(text) => {
             let instructions: Vec<&str> = text.split(", ").collect();
             let mut x = 0i16;
