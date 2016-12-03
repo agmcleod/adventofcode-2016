@@ -12,10 +12,14 @@ fn read_text() -> Result<String> {
 fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &Vec<Vec<&str>>) -> ([i16; 2], String) {
     let mut result = [start_pos[0], start_pos[1]];
 
+    let max = grid.len() as i16;
+
     for command in commands {
         if *command == "" {
             continue
         }
+
+        let current_result = [result[0], result[1]];
 
         match *command {
             "L" => {
@@ -33,18 +37,13 @@ fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &Vec<
             _ => {},
         }
 
-        if result[0] < 0 {
-            result[0] = 0;
-        }
-        if result[1] < 0 {
-            result[1] = 0;
-        }
-
-        if result[0] > 2 {
-            result[0] = 2;
-        }
-        if result[1] > 2 {
-            result[1] = 2;
+        if result[0] < 0 || result[0] >= max {
+            result[0] = current_result[0];
+        } else if result[1] < 0 || result[1] >= max {
+            result[1] = current_result[1];
+        } else if grid[result[1] as usize][result[0] as usize] == "" {
+            result[0] = current_result[0];
+            result[1] = current_result[1];
         }
     }
 
@@ -81,8 +80,18 @@ fn main() {
         vec!["7", "8", "9"]
     ];
 
+    let gridp2 = vec![
+        vec!["", "", "1", "", ""],
+        vec!["", "2", "3", "4", ""],
+        vec!["5", "6", "7", "8", "9"],
+        vec!["", "A", "B", "C", ""],
+        vec!["", "", "D", "", ""],
+    ];
+
     let mut start_pos = [1, 1];
 
     let lines: Vec<&str> = text.split("\n").collect();
     solve_for_grid(&mut start_pos, &grid, &lines);
+    start_pos = [0, 2];
+    solve_for_grid(&mut start_pos, &gridp2, &lines);
 }
