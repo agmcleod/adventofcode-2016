@@ -9,8 +9,8 @@ fn read_text() -> Result<String> {
   Ok(text)
 }
 
-fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &[[i16; 3]; 3]) -> [i16; 3] {
-    let mut result = [0, start_pos[0], start_pos[1]];
+fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &[[&str; 3]; 3]) -> ([i16; 2], String) {
+    let mut result = [start_pos[0], start_pos[1]];
 
     for command in commands {
         if *command == "" {
@@ -19,38 +19,36 @@ fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &[[i1
 
         match *command {
             "L" => {
-                result[1] -=1;
+                result[0] -=1;
             },
             "R" => {
-                result[1] += 1;
+                result[0] += 1;
             },
             "U" => {
-                result[2] -= 1;
+                result[1] -= 1;
             },
             "D" => {
-                result[2] += 1;
+                result[1] += 1;
             },
             _ => {},
         }
 
+        if result[0] < 0 {
+            result[0] = 0;
+        }
         if result[1] < 0 {
             result[1] = 0;
         }
-        if result[2] < 0 {
-            result[2] = 0;
-        }
 
+        if result[0] > 2 {
+            result[0] = 2;
+        }
         if result[1] > 2 {
             result[1] = 2;
         }
-        if result[2] > 2 {
-            result[2] = 2;
-        }
     }
 
-    result[0] = grid[result[2] as usize][result[1] as usize];
-
-    result
+    return (result, String::from(grid[result[1] as usize][result[0] as usize]))
 }
 
 fn main() {
@@ -60,9 +58,9 @@ fn main() {
     };
 
     let grid = [
-        [1, 2, 3],
-        [4, 5, 6],
-        [7, 8, 9]
+        ["1", "2", "3"],
+        ["4", "5", "6"],
+        ["7", "8", "9"]
     ];
 
     let mut start_pos = [1, 1];
@@ -76,10 +74,10 @@ fn main() {
         }
         let commands: Vec<&str> = line.split("").collect();
 
-        let result = get_code_from_command(&start_pos, &commands, &grid);
-        start_pos[0] = result[1];
-        start_pos[1] = result[2];
-        codes.push(result[0].to_string());
+        let (result, code) = get_code_from_command(&start_pos, &commands, &grid);
+        start_pos[0] = result[0];
+        start_pos[1] = result[1];
+        codes.push(code);
     }
 
     println!("{}", codes.join(""));
