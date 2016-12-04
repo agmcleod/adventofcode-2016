@@ -6,7 +6,12 @@ struct Room {
     hash: String,
     id: usize,
     letters_by_count: HashMap<usize, Vec<String>>,
+    name: String,
 }
+
+static LETTERS: [&'static str; 26] = [
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+];
 
 impl Room {
     fn new(line: &str) -> Room {
@@ -51,6 +56,7 @@ impl Room {
             hash: hash.join(""),
             id: id,
             letters_by_count: letters_by_count,
+            name: pieces[0..pieces.len() - 1].join(""),
         };
 
         room
@@ -89,6 +95,17 @@ impl Room {
 
         return false
     }
+
+    fn decrypt(self: &Room) -> String {
+        let mut result = String::new();
+        let letters: Vec<String> = self.name.replace("-", "").chars().map(|v| v.to_string()).collect();
+        for letter in letters {
+            let index = LETTERS.iter().position(|&v| v == letter).unwrap();
+            result.push_str(LETTERS[(index + self.id) % LETTERS.len()]);
+        }
+
+        result
+    }
 }
 
 fn main() {
@@ -102,6 +119,10 @@ fn main() {
         let room = Room::new(line);
         if room.is_real() {
             count += room.id;
+            let name = room.decrypt();
+            if name.contains("north") && name.contains("pole") {
+                println!("north pole room: {}", room.id);
+            }
         }
     }
 
