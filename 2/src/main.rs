@@ -41,13 +41,10 @@ fn get_code_from_command(start_pos: &[i16; 2], commands: &Vec<&str>, grid: &Vec<
     return (result, String::from(grid[result[1] as usize][result[0] as usize]))
 }
 
-fn solve_for_grid(start_pos: &mut [i16; 2], grid: &Vec<Vec<&str>>, commands: &Vec<&str>) {
+fn solve_for_grid(start_pos: &mut [i16; 2], grid: &Vec<Vec<&str>>, commands: &str) {
     let mut codes = Vec::<String>::new();
 
-    for line in commands {
-        if *line == "" {
-            continue
-        }
+    for line in commands.lines() {
         let commands: Vec<&str> = line.split("").collect();
 
         let (result, code) = get_code_from_command(&start_pos, &commands, &grid);
@@ -81,8 +78,7 @@ fn main() {
 
     let mut start_pos = [1, 1];
 
-    let lines: Vec<&str> = text.split("\n").collect();
-    solve_for_grid(&mut start_pos, &grid, &lines);
+    solve_for_grid(&mut start_pos, &grid, &text);
     start_pos = [0, 2];
-    solve_for_grid(&mut start_pos, &gridp2, &lines);
+    solve_for_grid(&mut start_pos, &gridp2, &text);
 }

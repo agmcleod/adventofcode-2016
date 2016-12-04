@@ -74,10 +74,10 @@ fn main() {
 
             for instruction in instructions {
                 let instruction = String::from(instruction);
-                let bits: Vec<String> = instruction.split("").map(|s| String::from(s)).collect();
+                let bits: Vec<String> = instruction.chars().map(|s| s.to_string()).collect();
                 let n: i16 = bits[2..bits.len()].join("").parse().unwrap();
 
-                direction = change_direction(direction, bits[1] == "R");
+                direction = change_direction(direction, bits[0] == "R");
 
                 match direction {
                     Direction::N => {

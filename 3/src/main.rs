@@ -13,14 +13,13 @@ fn main() {
         Err(err) => panic!("{:?}", err),
     };
 
-    let lines = text.split("\n");
     let mut count = 0;
     let split_re = Regex::new(r"\s+").unwrap();
 
     let mut vertical_triangles = Vec::new();
 
     let mut line_count = 0;
-    for line in lines {
+    for line in text.lines() {
         if line == "" {
             continue
         }
