@@ -38,19 +38,30 @@ fn main() {
     }
 
     let mut result: [&str; 8] = [""; 8];
+    let mut result_p2: [&str; 8] = [""; 8];
     for (i, col) in letter_counts.iter().enumerate() {
         let mut max_count = 0;
+        let mut min_count = 10000;
+
         let mut highest_char = "";
+        let mut min_char = "";
 
         for (ch, count) in col {
             max_count = cmp::max(max_count, *count);
             if max_count == *count {
                 highest_char = ch;
             }
+
+            min_count = cmp::min(min_count, *count);
+            if min_count == *count {
+                min_char = ch;
+            }
         }
 
         result[i] = highest_char;
+        result_p2[i] = min_char;
     }
 
     println!("{}", result.join(""));
+    println!("{}", result_p2.join(""));
 }
