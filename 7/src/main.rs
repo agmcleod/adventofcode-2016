@@ -130,9 +130,9 @@ fn valid_ssl(address: &str) -> bool {
     let mut aba_results: Vec<[&str; 3]> = Vec::new();
     for part in re.split(address) {
         if iter % 2 == 0 {
-            aba_results = check_text_for_aba(part);
-            if aba_results.len() > 0 {
-                break
+            let res = check_text_for_aba(part);
+            for r in res {
+                aba_results.push(r);
             }
         }
         iter += 1;
