@@ -115,5 +115,7 @@ fn main() {
             }
         })
     });
+
+    print_grid(&grid);
     println!("{}", count);
 }
