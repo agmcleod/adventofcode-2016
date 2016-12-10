@@ -1,0 +1,8 @@
+[package]
+name = "9"
+version = "0.1.0"
+authors = ["Aaron McLeod <aaron.g.mcleod@gmail.com>"]
+
+[dependencies]
+regex = "*"
+read_input = { path = "../read_input" }
