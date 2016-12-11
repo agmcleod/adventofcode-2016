@@ -30,7 +30,7 @@ fn next_marker<'a>(re: &Regex, text: &'a str) -> (&'a str, usize) {
         Some(c) => c,
         None => {
             return ("", 0)
-        }
+        },
     };
 
     let text = match capture.at(0) {
@@ -50,13 +50,7 @@ fn next_marker<'a>(re: &Regex, text: &'a str) -> (&'a str, usize) {
     }
 }
 
-fn main() {
-    let text = match read_text("input.txt") {
-        Ok(t) => t,
-        Err(err) => panic!("{:?}", err),
-    };
-
-    let re = Regex::new(r"^\(\d+x\d+\)").unwrap();
+fn decompress(text: String, re: &Regex, v2: bool) -> String {
     let mut text = text.as_ref();
     let mut transformed = String::new();
     loop {
@@ -74,7 +68,15 @@ fn main() {
 
         let marker = Marker::new(result.0);
         let start_index = result.1;
-        let sub = &text[start_index..(marker.range + start_index)];
+
+        let mut sub = String::from(&text[start_index..(marker.range + start_index)]);
+
+        if v2 && re.is_match(sub.as_ref()) {
+            sub = decompress(sub, re, true);
+        }
+
+        let sub = sub.as_ref();
+
         let mut i = 0;
         while i < marker.repeat {
             transformed.push_str(sub);
@@ -87,5 +89,16 @@ fn main() {
         text = &text[(marker.range + start_index)..];
     }
 
-    println!("{}", transformed.len());
+    transformed
+}
+
+fn main() {
+    let text = match read_text("input.txt") {
+        Ok(t) => t,
+        Err(err) => panic!("{:?}", err),
+    };
+
+    let re = Regex::new(r"^\(\d+x\d+\)").unwrap();
+    println!("{}", decompress(text.clone(), &re, false).len());
+    println!("{}", decompress(text, &re, true).len());
 }
