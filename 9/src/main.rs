@@ -50,17 +50,17 @@ fn next_marker<'a>(re: &Regex, text: &'a str) -> (&'a str, usize) {
     }
 }
 
-fn decompress(text: String, re: &Regex, v2: bool) -> String {
+fn decompress(text: String, re: &Regex, v2: bool) -> usize {
     let mut text = text.as_ref();
-    let mut transformed = String::new();
+    let mut counter = 0;
     loop {
         let result = next_marker(&re, text);
         if result.0 == "" {
             if text.len() <= 1 {
-                transformed.push_str(text);
+                counter += text.len();
                 break
             } else {
-                transformed.push_str(&text[0..1]);
+                counter += 1;
                 text = &text[1..];
                 continue
             }
@@ -69,18 +69,12 @@ fn decompress(text: String, re: &Regex, v2: bool) -> String {
         let marker = Marker::new(result.0);
         let start_index = result.1;
 
-        let mut sub = String::from(&text[start_index..(marker.range + start_index)]);
+        let sub = String::from(&text[start_index..(marker.range + start_index)]);
 
         if v2 && re.is_match(sub.as_ref()) {
-            sub = decompress(sub, re, true);
-        }
-
-        let sub = sub.as_ref();
-
-        let mut i = 0;
-        while i < marker.repeat {
-            transformed.push_str(sub);
-            i += 1;
+            counter += decompress(sub, re, true) * marker.repeat;
+        } else {
+            counter += sub.len() * marker.repeat;
         }
 
         if marker.range + start_index >= text.len() {
@@ -89,7 +83,7 @@ fn decompress(text: String, re: &Regex, v2: bool) -> String {
         text = &text[(marker.range + start_index)..];
     }
 
-    transformed
+    counter
 }
 
 fn main() {
@@ -99,6 +93,6 @@ fn main() {
     };
 
     let re = Regex::new(r"^\(\d+x\d+\)").unwrap();
-    println!("{}", decompress(text.clone(), &re, false).len());
-    println!("{}", decompress(text, &re, true).len());
+    println!("{}", decompress(text.clone(), &re, false));
+    println!("{}", decompress(text, &re, true));
 }
