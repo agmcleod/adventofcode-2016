@@ -139,6 +139,10 @@ fn map_instructions<'a>(instructions: &'a mut InstructionMap<'a>, outputs: &'a m
                 None => panic!("No value found for \"high give to\" index"),
             };
 
+            if high_type == "output" {
+                outputs.insert(high_index, [0; 20]);
+            }
+
             if instructions.contains_key(&index) {
                 panic!("Instruction already contains one for bot {}", index);
             }
