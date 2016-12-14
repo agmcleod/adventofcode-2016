@@ -49,7 +49,9 @@ impl Bot {
     }
 }
 
+#[derive(Debug)]
 struct Instruction<'a> {
+    num: usize,
     low_index: usize,
     high_index: usize,
     low_type: &'a str,
@@ -57,13 +59,13 @@ struct Instruction<'a> {
 }
 
 impl<'a> Instruction<'a> {
-    fn new(low_index: usize, high_index: usize, low_type: &'a str, high_type: &'a str) -> Instruction<'a> {
-        Instruction{ low_index: low_index, high_index: high_index, low_type: low_type, high_type: high_type }
+    fn new(num: usize, low_index: usize, high_index: usize, low_type: &'a str, high_type: &'a str) -> Instruction<'a> {
+        Instruction{ num: num, low_index: low_index, high_index: high_index, low_type: low_type, high_type: high_type }
     }
 }
 
 type BotMap = HashMap<usize, Bot>;
-type InstructionMap<'a> = HashMap<usize, Instruction<'a>>;
+type Instructions<'a> = Vec<Instruction<'a>>;
 type OutputMap = HashMap<usize, [usize; 20]>;
 
 fn give_to_bot(bots: &mut BotMap, index: &usize, value: usize) {
@@ -105,7 +107,109 @@ fn new_bot_with_chip(bots: &mut BotMap, index: usize, num: usize) {
     bots.insert(index, bot);
 }
 
-fn map_instructions<'a>(instructions: &mut InstructionMap<'a>, outputs: &mut OutputMap, text: &'a String) {
+fn insert_chip_into_output(output: &mut[usize; 20], val: usize) {
+    let mut it = output.iter_mut();
+    loop {
+        match it.next() {
+            Some(n) => {
+                if *n == 0 {
+                    *n = val;
+                    break
+                }
+            },
+            None => break
+        }
+    }
+}
+
+fn run_bot_operation(bot: &mut Bot, outputs: &mut OutputMap, instruction: &Instruction) -> [[usize; 2]; 2] {
+    let mut operations = [[0; 2]; 2];
+    let low = bot.take_chip("low");
+    let high = bot.take_chip("high");
+
+    if instruction.low_type == "bot" {
+        operations[0] = [instruction.low_index, low];
+    } else {
+        println!("give to output {}", instruction.low_index);
+        let mut output = outputs.get_mut(&instruction.low_index).unwrap();
+        insert_chip_into_output(&mut output, low);
+    }
+
+    if instruction.high_type == "bot" {
+        operations[1] = [instruction.high_index, high];
+    } else {
+        println!("give to output {}", instruction.high_index);
+        let mut output = outputs.get_mut(&instruction.high_index).unwrap();
+        insert_chip_into_output(&mut output, low);
+    }
+
+    operations
+}
+
+fn solve(instructions: &Instructions, bots: &mut BotMap, outputs: &mut OutputMap) {
+    let target_values = [61, 17];
+    let mut index = 0;
+    let mut found_p1 = false;
+    let mut found_p2 = false;
+    loop {
+        let instruction = instructions.get(index % instructions.len()).unwrap();
+        index += 1;
+
+        let mut operations = [[0; 2]; 2];
+        {
+            let mut bot = match bots.get_mut(&instruction.num) {
+                Some(b) => b,
+                None => continue,
+            };
+
+            if bot.has_two() {
+                operations = run_bot_operation(&mut bot, outputs, &instruction);
+            }
+        }
+
+        let zero = 0;
+        let one = 1;
+        let two = 2;
+        let first = outputs.get(&zero).unwrap()[0];
+        let second = outputs.get(&one).unwrap()[0];
+        let third = outputs.get(&two).unwrap()[0];
+        if first != 0 && second != 0 && third != 0 {
+            println!("{}", first * second * third);
+            found_p2 = true;
+        }
+
+        if operations[0][1] != 0 && operations[1][1] != 0 {
+            give_to_bot(bots, &operations[0][0], operations[0][1]);
+            give_to_bot(bots, &operations[1][0], operations[1][1]);
+
+            let bots_to_test = [
+                bots.get(&instruction.low_index), bots.get(&instruction.high_index)
+            ];
+
+            for (i, b) in bots_to_test.iter().enumerate() {
+                if let Some(bot_to_test) = *b {
+                    if (bot_to_test.chips[0] == target_values[0] && bot_to_test.chips[1] == target_values[1]) ||
+                    (bot_to_test.chips[0] == target_values[1] && bot_to_test.chips[1] == target_values[0]) {
+                        if i == 0 {
+                            println!("p1 bot: {}", instruction.low_index);
+                        } else {
+                            println!("p1 bot: {}", instruction.high_index);
+                        }
+                        found_p1 = true;
+
+                        break
+                    }
+                }
+            }
+        }
+
+        if found_p1 && found_p2 {
+            break
+        }
+    }
+}
+
+fn build_instructions<'a>(instructions: &mut Instructions<'a>, outputs: &mut OutputMap, text: &'a String) {
     for line in text.lines() {
         let mut words = line.split(" ");
         let line_type = words.next();
@@ -139,117 +243,11 @@ fn map_instructions<'a>(instructions: &mut InstructionMap<'a>, outputs: &mut Out
                 None => panic!("No value found for \"high give to\" index"),
             };
 
-               if high_type == "output" {
+            if high_type == "output" {
                 outputs.insert(high_index, [0; 20]);
             }
 
-            if instructions.contains_key(&index) {
-                panic!("Instruction already contains one for bot {}", index);
-            }
-            instructions.insert(index, Instruction::new(low_index, high_index, low_type, high_type));
-        }
-    }
-}
-
-fn insert_chip_into_output(output: &mut[usize; 20], val: usize) {
-    let mut it = output.iter_mut();
-    loop {
-        match it.next() {
-            Some(n) => {
-                if *n == 0 {
-                    *n = val;
-                    break
-                }
-            },
-            None => break
-        }
-    }
-}
-
-fn operate_two_chip_bots(bots: &mut BotMap, outputs: &mut OutputMap, instructions: &InstructionMap) {
-    let mut bot_operations: Vec<[usize; 2]> = Vec::with_capacity(bots.len());
-    let mut found_with_two = false;
-    for (giver_index, bot) in bots.iter_mut() {
-        if bot.has_two() {
-            found_with_two = true;
-            let low = bot.take_chip("low");
-            let high = bot.take_chip("high");
-            let instruction = match instructions.get(giver_index) {
-                Some(instruction) => instruction,
-                None => panic!("No instruction for {}", giver_index),
-            };
-            if instruction.low_type == "bot" {
-                bot_operations.push([instruction.low_index, low]);
-            } else {
-                println!("give to output {}", instruction.low_index);
-                let mut output = outputs.get_mut(&instruction.low_index).unwrap();
-                insert_chip_into_output(&mut output, low);
-            }
-
-            if instruction.high_type == "bot" {
-                bot_operations.push([instruction.high_index, high]);
-            } else {
-                println!("give to output {}", instruction.high_index);
-                let mut output = outputs.get_mut(&instruction.high_index).unwrap();
-                insert_chip_into_output(&mut output, low);
-            }
-        }
-    }
-
-    if found_with_two {
-        println!("found with two");
-    }
-
-    for operation in bot_operations {
-        if operation[0] != 0 && operation[1] != 0 {
-            give_to_bot(bots, &operation[0], operation[1]);
-        }
-    }
-}
-
-fn solve_p1(text: &String) {
-    let mut bots: BotMap = HashMap::new();
-    let mut outputs: OutputMap = HashMap::new();
-    let mut instructions: InstructionMap = HashMap::new();
-    map_bots(&mut bots, &text);
-    map_instructions(&mut instructions, &mut outputs, &text);
-
-    let target_values = [61, 17];
-    let mut found_bot = false;
-    loop {
-        operate_two_chip_bots(&mut bots, &mut outputs, &instructions);
-        for (i, bot) in bots.iter_mut() {
-            if (bot.chips[0] == target_values[0] && bot.chips[1] == target_values[1]) || (bot.chips[0] == target_values[1] && bot.chips[1] == target_values[0]) {
-                println!("{}", i);
-                found_bot = true;
-                break
-            }
-        }
-
-        if found_bot {
-            break
-        }
-    }
-}
-
-fn solve_p2(text: &String) {
-    let mut bots: BotMap = HashMap::new();
-    let mut outputs: OutputMap = HashMap::new();
-    let mut instructions: InstructionMap = HashMap::new();
-    map_bots(&mut bots, &text);
-    map_instructions(&mut instructions, &mut outputs, &text);
-
-    loop {
-        operate_two_chip_bots(&mut bots, &mut outputs, &instructions);
-        let zero = 0;
-        let one = 1;
-        let two = 2;
-        let first = outputs.get(&zero).unwrap()[0];
-        let second = outputs.get(&one).unwrap()[0];
-        let third = outputs.get(&two).unwrap()[0];
-        if first != 0 && second != 0 && third != 0 {
-            println!("{}", first * second * third);
-            break
+            instructions.push(Instruction::new(index, low_index, high_index, low_type, high_type));
         }
     }
 }
@@ -260,6 +258,10 @@ fn main() {
         Err(e) => panic!("{:?}", e),
     };
 
-    solve_p1(&text);
-    solve_p2(&text);
+    let mut instructions: Instructions = Instructions::with_capacity(text.lines().count());
+    let mut outputs: OutputMap = HashMap::new();
+    let mut bots: BotMap = HashMap::new();
+    map_bots(&mut bots, &text);
+    build_instructions(&mut instructions, &mut outputs, &text);
+    solve(&instructions, &mut bots, &mut outputs);
 }
