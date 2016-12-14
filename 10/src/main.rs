@@ -122,7 +122,7 @@ fn insert_chip_into_output(output: &mut[usize; 20], val: usize) {
     }
 }
 
-fn run_bot_operation(bot: &mut Bot, outputs: &mut OutputMap, instruction: &Instruction) -> [[usize; 2]; 2] {
+fn build_bot_operation(bot: &mut Bot, outputs: &mut OutputMap, instruction: &Instruction) -> [[usize; 2]; 2] {
     let mut operations = [[0; 2]; 2];
     let low = bot.take_chip("low");
     let high = bot.take_chip("high");
@@ -130,7 +130,6 @@ fn run_bot_operation(bot: &mut Bot, outputs: &mut OutputMap, instruction: &Instr
     if instruction.low_type == "bot" {
         operations[0] = [instruction.low_index, low];
     } else {
-        println!("give to output {}", instruction.low_index);
         let mut output = outputs.get_mut(&instruction.low_index).unwrap();
         insert_chip_into_output(&mut output, low);
     }
@@ -138,7 +137,6 @@ fn run_bot_operation(bot: &mut Bot, outputs: &mut OutputMap, instruction: &Instr
     if instruction.high_type == "bot" {
         operations[1] = [instruction.high_index, high];
     } else {
-        println!("give to output {}", instruction.high_index);
         let mut output = outputs.get_mut(&instruction.high_index).unwrap();
         insert_chip_into_output(&mut output, low);
     }
@@ -163,7 +161,7 @@ fn solve(instructions: &Instructions, bots: &mut BotMap, outputs: &mut OutputMap
             };
 
             if bot.has_two() {
-                operations = run_bot_operation(&mut bot, outputs, &instruction);
+                operations = build_bot_operation(&mut bot, outputs, &instruction);
             }
         }
 
@@ -178,27 +176,34 @@ fn solve(instructions: &Instructions, bots: &mut BotMap, outputs: &mut OutputMap
             found_p2 = true;
         }
 
-        if operations[0][1] != 0 && operations[1][1] != 0 {
+        let mut bots_to_test: [Option<&Bot>; 2] = [None, None];
+
+        if operations[0][1] != 0 {
             give_to_bot(bots, &operations[0][0], operations[0][1]);
+        }
+        if operations[1][1] != 0 {
             give_to_bot(bots, &operations[1][0], operations[1][1]);
+        }
 
-            let bots_to_test = [
-                bots.get(&instruction.low_index), bots.get(&instruction.high_index)
-            ];
+        if operations[0][1] != 0 {
+            bots_to_test[0] = bots.get(&instruction.low_index);
+        }
+        if operations[1][1] != 0 {
+            bots_to_test[1] = bots.get(&instruction.low_index);
+        }
 
-            for (i, b) in bots_to_test.iter().enumerate() {
-                if let Some(bot_to_test) = *b {
-                    if (bot_to_test.chips[0] == target_values[0] && bot_to_test.chips[1] == target_values[1]) ||
-                    (bot_to_test.chips[0] == target_values[1] && bot_to_test.chips[1] == target_values[0]) {
-                        if i == 0 {
-                            println!("p1 bot: {}", instruction.low_index);
-                        } else {
-                            println!("p1 bot: {}", instruction.high_index);
-                        }
-                        found_p1 = true;
-
-                        break
+        for (i, b) in bots_to_test.iter().enumerate() {
+            if let Some(bot_to_test) = *b {
+                if (bot_to_test.chips[0] == target_values[0] && bot_to_test.chips[1] == target_values[1]) ||
+                (bot_to_test.chips[0] == target_values[1] && bot_to_test.chips[1] == target_values[0]) {
+                    if i == 0 {
+                        println!("p1 bot: {}", instruction.low_index);
+                    } else {
+                        println!("p1 bot: {}", instruction.high_index);
                     }
+                    found_p1 = true;
+
+                    break
                 }
             }
         }
