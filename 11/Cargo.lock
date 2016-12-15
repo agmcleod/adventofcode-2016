@@ -1,0 +1,11 @@
+[root]
+name = "11"
+version = "0.1.0"
+dependencies = [
+ "read_input 0.1.0",
+]
+
+[[package]]
+name = "read_input"
+version = "0.1.0"
+
