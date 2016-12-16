@@ -5,3 +5,4 @@ authors = ["Aaron McLeod <aaron.g.mcleod@gmail.com>"]
 
 [dependencies]
 read_input = { path = "../read_input" }
+init_with = "*"
