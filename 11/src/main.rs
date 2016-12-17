@@ -22,7 +22,6 @@ impl<'a> PartialEq for Component<'a> {
 }
 
 struct Elevator<'a> {
-    floor: usize,
     slot_one: Option<Component<'a>>,
     slot_two: Option<Component<'a>>,
 }
@@ -31,55 +30,125 @@ const FLOOR_SPACES: usize = 10;
 const FLOORS: usize = 4;
 
 type Floor<'a> = Vec<Component<'a>>;
+
 type NodeState<'a> = [Floor<'a>; FLOORS];
 
 struct Node<'a> {
     connected_nodes: Vec<Node<'a>>,
     node_state: NodeState<'a>,
+    elevator: usize,
 }
 
 impl<'a> Node<'a> {
-    fn new() -> Node<'a> {
-        let empty_state: NodeState = {
-            let data = Vec::with_capacity(FLOOR_SPACES);
-            <[Vec<Component>; FLOORS]>::init_with(|| {
-                data.clone()
-            })
-        };
-        Node{ connected_nodes: Vec::new(), node_state: empty_state }
+    fn new(node_state: NodeState<'a>, elevator: usize) -> Node<'a> {
+        Node{ connected_nodes: Vec::new(), node_state: node_state, elevator: elevator }
     }
+}
 
-    fn as_string(self: &Node<'a>) -> String {
-        let mut result = String::new();
-        for floor in self.node_state.iter() {
-            for component in floor {
-                result.push_str(&component.name[0..2]);
-                if component.component_type == ComponentType::Generator {
-                    result.push_str("-g");
-                }
+fn as_string<'a>(node_state: &NodeState<'a>) -> String {
+    let mut result = String::new();
+    for floor in node_state.iter() {
+        for component in floor {
+            result.push_str(&component.name[0..2]);
+            if component.component_type == ComponentType::Generator {
+                result.push_str("-g");
             }
         }
 
-        result
+        let additional_text_count = FLOOR_SPACES - floor.len();
+        for _ in 0..additional_text_count {
+            result.push_str(".");
+        }
     }
+
+    result
 }
 
-fn build_nodes<'a>(first_state: &NodeState<'a>, elevator: &mut Elevator) -> Node<'a> {
-    let mut node_usage: HashMap<&str, bool> = HashMap::new();
-
-    next_node(first_state, elevator, &mut node_usage)
+fn build_nodes<'a>(first_state: NodeState<'a>, elevator: &mut Elevator<'a>) -> Node<'a> {
+    let mut node_usage: HashMap<String, bool> = HashMap::new();
+    let node = Node::new(first_state, 0);
+    let node = next_node(node, elevator, &mut node_usage);
+    println!("{}", node_usage.len());
+    node
 }
 
-fn next_node<'a>(node_state: &NodeState<'a>, elevator: &mut Elevator, node_usage: &mut HashMap<&str, bool>) -> Node<'a> {
-    let mut node = Node::new();
+fn build_node_state<'a>(existing_node_state: &NodeState<'a>, modified_floor: Floor<'a>, floor_index: usize) -> NodeState<'a> {
+    let mut new_node_state: NodeState<'a> = [
+        existing_node_state[0].clone(),
+        existing_node_state[1].clone(),
+        existing_node_state[2].clone(),
+        existing_node_state[3].clone()
+    ];
+    new_node_state[floor_index] = modified_floor;
 
-    let ref floor = node_state[elevator.floor];
-    let move_possibilities = get_safe_things_to_move(&floor);
+    new_node_state
+}
 
-    let move_possibilities = move_possibilities.iter().filter(|possibility| {
-        let floor_without_selected = floor.iter().filter(|&component| !possibility.contains(component)).cloned().collect();
+fn next_node<'a>(node: Node<'a>, elevator: &mut Elevator<'a>, node_usage: &mut HashMap<String, bool>) -> Node<'a> {
+    let move_possibilities;
+    {
+        move_possibilities = get_safe_things_to_move(&node.node_state[node.elevator]);
+    }
+
+    if node.node_state[3].len() == FLOOR_SPACES {
+        return node
+    }
+
+    let mut possible_floors: Vec<usize> = Vec::with_capacity(2);
+
+    if node.elevator == 0 {
+        possible_floors.push(1);
+    } else if node.elevator == 3 {
+        possible_floors.push(2);
+    } else {
+        possible_floors.push(node.elevator - 1);
+        possible_floors.push(node.elevator + 1);
+    }
+
+    let mut move_possibilities: Vec<Vec<Component<'a>>> = move_possibilities.iter().filter(|possibility| {
+        let floor_without_selected = node.node_state[node.elevator].iter().filter(|&component| !possibility.contains(component)).cloned().collect();
         floor_is_safe(&floor_without_selected, Some(elevator))
-    });
+    }).cloned().collect();
+
+    let mut connected_nodes: Vec<Node<'a>> = Vec::new();
+
+    for floor_index in possible_floors {
+        let ref floor = node.node_state[floor_index];
+        for possibility in move_possibilities.iter_mut() {
+            for component in possibility.iter_mut() {
+                let mut floor = floor.clone();
+                floor.push(*component);
+                let node_state = build_node_state(&node.node_state, floor, floor_index);
+                let node_string = as_string(&node_state);
+                if !node_usage.contains_key(&node_string) {
+                    let node = Node::new(node_state, floor_index);
+                    connected_nodes.push(node);
+                    node_usage.insert(node_string, true);
+                }
+            }
+
+            if possibility.len() > 1 {
+                let mut floor = floor.clone();
+                for component in possibility.iter_mut() {
+                    floor.push(*component);
+                }
+
+                let node_state = build_node_state(&node.node_state, floor, floor_index);
+                let node_string = as_string(&node_state);
+                if !node_usage.contains_key(&node_string) {
+                    let node = Node::new(node_state, floor_index);
+                    connected_nodes.push(node);
+                    node_usage.insert(node_string, true);
+                }
+            }
+        }
+    }
+
+    let mut node = node;
+
+    for sub_node in connected_nodes {
+        node.connected_nodes.push(next_node(sub_node, elevator, node_usage));
+    }
 
     node
 }
@@ -185,7 +254,6 @@ fn main() {
         })
     };
 
-    let mut column_index = 0;
     for (floor_index, line) in text.lines().enumerate() {
         let mut words = line.split(" ").skip_while(|&w| w != "a" && w != "nothing");
         if let Some(word) = words.next() {
@@ -195,6 +263,8 @@ fn main() {
         } else {
             continue
         }
+
+        let mut floor: Floor = Vec::new();
 
         while let Some(word) = words.next() {
             if word == "generator" || word == "a" || word == "and" || word == "microchip" {
@@ -209,14 +279,14 @@ fn main() {
                 ComponentType::Generator
             };
 
-            first_state[floor_index][column_index] = Component{ name: name, component_type: component_type };
-
-            column_index += 1;
+            floor.push(Component{ name: name, component_type: component_type });
         }
+
+        first_state[floor_index] = floor;
     }
 
-    let mut elevator = Elevator{ floor: 0, slot_one: None, slot_two: None };
-    let nodes = build_nodes(&first_state, &mut elevator);
+    let mut elevator = Elevator{ slot_one: None, slot_two: None };
+    let nodes = build_nodes(first_state, &mut elevator);
 }
 
 #[test]
@@ -268,7 +338,6 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
     let elevator = Elevator{
-        floor: 0,
         slot_one: Some(Component{ name: "four", component_type: ComponentType::Generator }),
         slot_two: None,
     };
@@ -282,7 +351,6 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
     let elevator = Elevator{
-        floor: 0,
         slot_one: Some(Component{ name: "four", component_type: ComponentType::Chip }),
         slot_two: None,
     };
@@ -296,7 +364,6 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
     let elevator = Elevator{
-        floor: 0,
         slot_one: Some(Component{ name: "four", component_type: ComponentType::Chip }),
         slot_two: Some(Component{ name: "four", component_type: ComponentType::Generator }),
     };
