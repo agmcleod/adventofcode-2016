@@ -11,6 +11,7 @@ enum ComponentType {
 
 #[derive(Copy, Clone, Debug)]
 struct Component<'a> {
+    id: usize,
     name: &'a str,
     component_type: ComponentType,
 }
@@ -19,11 +20,6 @@ impl<'a> PartialEq for Component<'a> {
     fn eq(&self, other: &Component) -> bool {
         self.name == other.name && self.component_type == other.component_type
     }
-}
-
-struct Elevator<'a> {
-    slot_one: Option<Component<'a>>,
-    slot_two: Option<Component<'a>>,
 }
 
 const FLOOR_SPACES: usize = 10;
@@ -41,34 +37,26 @@ struct Node<'a> {
 
 impl<'a> Node<'a> {
     fn new(node_state: NodeState<'a>, elevator: usize) -> Node<'a> {
-        Node{ connected_nodes: Vec::new(), node_state: node_state, elevator: elevator }
+        let mut node = Node{ connected_nodes: Vec::new(), node_state: node_state, elevator: elevator };
+        for floor in node.node_state.iter_mut() {
+            floor.sort_by(|a, b| a.name.cmp(b.name));
+        }
+        node
     }
 }
 
 fn as_string<'a>(node_state: &NodeState<'a>) -> String {
-    let mut result = String::new();
-    for floor in node_state.iter() {
-        for component in floor {
-            result.push_str(&component.name[0..2]);
-            if component.component_type == ComponentType::Generator {
-                result.push_str("-g");
-            }
-        }
-
-        let additional_text_count = FLOOR_SPACES - floor.len();
-        for _ in 0..additional_text_count {
-            result.push_str(".");
-        }
-    }
-
-    result
+    node_state.iter().map(|floor| {
+        floor.iter().map(|component| {
+            component.id.to_string()
+        }).collect::<Vec<String>>().join("")
+    }).collect::<Vec<String>>().join("")
 }
 
-fn build_nodes<'a>(first_state: NodeState<'a>, elevator: &mut Elevator<'a>) -> Node<'a> {
+fn build_nodes<'a>(first_state: NodeState<'a>) -> Node<'a> {
     let mut node_usage: HashMap<String, bool> = HashMap::new();
     let node = Node::new(first_state, 0);
-    let node = next_node(node, elevator, &mut node_usage);
-    println!("{}", node_usage.len());
+    let node = next_node(node, &mut node_usage);
     node
 }
 
@@ -84,7 +72,7 @@ fn build_node_state<'a>(existing_node_state: &NodeState<'a>, modified_floor: Flo
     new_node_state
 }
 
-fn next_node<'a>(node: Node<'a>, elevator: &mut Elevator<'a>, node_usage: &mut HashMap<String, bool>) -> Node<'a> {
+fn next_node<'a>(node: Node<'a>, node_usage: &mut HashMap<String, bool>) -> Node<'a> {
     let move_possibilities;
     {
         move_possibilities = get_safe_things_to_move(&node.node_state[node.elevator]);
@@ -107,18 +95,23 @@ fn next_node<'a>(node: Node<'a>, elevator: &mut Elevator<'a>, node_usage: &mut H
 
     let mut move_possibilities: Vec<Vec<Component<'a>>> = move_possibilities.iter().filter(|possibility| {
         let floor_without_selected = node.node_state[node.elevator].iter().filter(|&component| !possibility.contains(component)).cloned().collect();
-        floor_is_safe(&floor_without_selected, Some(elevator))
+        floor_is_safe(&floor_without_selected)
     }).cloned().collect();
 
     let mut connected_nodes: Vec<Node<'a>> = Vec::new();
 
     for floor_index in possible_floors {
         let ref floor = node.node_state[floor_index];
+        if floor.len() == FLOOR_SPACES {
+            continue
+        }
         for possibility in move_possibilities.iter_mut() {
             for component in possibility.iter_mut() {
                 let mut floor = floor.clone();
                 floor.push(*component);
-                let node_state = build_node_state(&node.node_state, floor, floor_index);
+                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
+                let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
+                node_state[node.elevator].remove(to_remove_index);
                 let node_string = as_string(&node_state);
                 if !node_usage.contains_key(&node_string) {
                     let node = Node::new(node_state, floor_index);
@@ -127,13 +120,19 @@ fn next_node<'a>(node: Node<'a>, elevator: &mut Elevator<'a>, node_usage: &mut H
                 }
             }
 
-            if possibility.len() > 1 {
+            if possibility.len() > 1 && floor.len() <= FLOOR_SPACES - possibility.len() {
                 let mut floor = floor.clone();
                 for component in possibility.iter_mut() {
                     floor.push(*component);
                 }
 
-                let node_state = build_node_state(&node.node_state, floor, floor_index);
+                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
+
+                for component in possibility.iter_mut() {
+                    let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
+                    node_state[node.elevator].remove(to_remove_index);
+                }
+
                 let node_string = as_string(&node_state);
                 if !node_usage.contains_key(&node_string) {
                     let node = Node::new(node_state, floor_index);
@@ -147,7 +146,7 @@ fn next_node<'a>(node: Node<'a>, elevator: &mut Elevator<'a>, node_usage: &mut H
     let mut node = node;
 
     for sub_node in connected_nodes {
-        node.connected_nodes.push(next_node(sub_node, elevator, node_usage));
+        node.connected_nodes.push(next_node(sub_node, node_usage));
     }
 
     node
@@ -174,20 +173,8 @@ fn get_safe_things_to_move<'a>(floor: &Floor<'a>) -> Vec<Vec<Component<'a>>> {
     things
 }
 
-fn floor_is_safe(floor: &Floor, elevator: Option<&Elevator>) -> bool {
-    let mut components_to_compare = floor.clone();
-
-    if let Some(e) = elevator {
-        if let Some(slot) = e.slot_one {
-            components_to_compare.push(slot);
-        }
-        if let Some(slot) = e.slot_two {
-            components_to_compare.push(slot);
-        }
-    }
-
-    components_to_compare.sort_by(|a, b| a.name.cmp(b.name));
-    let generator_count = components_to_compare.iter().fold(0, |sum, component|
+fn floor_is_safe(floor: &Floor) -> bool {
+    let generator_count = floor.iter().fold(0, |sum, component|
         if component.component_type == ComponentType::Generator {
             sum + 1
         } else {
@@ -195,7 +182,7 @@ fn floor_is_safe(floor: &Floor, elevator: Option<&Elevator>) -> bool {
         }
     );
 
-    let mut it = components_to_compare.iter();
+    let mut it = floor.iter();
     let mut component_one: Option<Component> = None;
 
     let mut is_safe = true;
@@ -254,6 +241,8 @@ fn main() {
         })
     };
 
+    let mut id = 1;
+
     for (floor_index, line) in text.lines().enumerate() {
         let mut words = line.split(" ").skip_while(|&w| w != "a" && w != "nothing");
         if let Some(word) = words.next() {
@@ -278,42 +267,43 @@ fn main() {
                 name = word;
                 ComponentType::Generator
             };
-
-            floor.push(Component{ name: name, component_type: component_type });
+            floor.push(Component{ id: id, name: name, component_type: component_type });
+            id += 1;
         }
 
         first_state[floor_index] = floor;
     }
 
-    let mut elevator = Elevator{ slot_one: None, slot_two: None };
-    let nodes = build_nodes(first_state, &mut elevator);
+    let nodes = build_nodes(first_state);
 }
 
 #[test]
 fn test_floor_is_safe() {
     let mut floor: Floor = Vec::with_capacity(FLOOR_SPACES);
-    assert_eq!(floor_is_safe(&floor, None), true);
+    assert_eq!(floor_is_safe(&floor), true);
 
     floor.push(Component{ name: "one", component_type: ComponentType::Chip });
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor, None), true);
+    assert_eq!(floor_is_safe(&floor), true);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor, None), false);
+    assert_eq!(floor_is_safe(&floor), false);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor, None), false);
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), false);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor, None), true);
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), true);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
@@ -321,7 +311,8 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Chip });
-    assert_eq!(floor_is_safe(&floor, None), false);
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), false);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
@@ -329,7 +320,8 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor, None), true);
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), true);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
@@ -337,12 +329,9 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    let elevator = Elevator{
-        slot_one: Some(Component{ name: "four", component_type: ComponentType::Generator }),
-        slot_two: None,
-    };
-    let elevator = Some(&elevator);
-    assert_eq!(floor_is_safe(&floor, elevator), true);
+    floor.push(Component{ name: "four", component_type: ComponentType::Generator });
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), true);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
@@ -350,12 +339,9 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    let elevator = Elevator{
-        slot_one: Some(Component{ name: "four", component_type: ComponentType::Chip }),
-        slot_two: None,
-    };
-    let elevator = Some(&elevator);
-    assert_eq!(floor_is_safe(&floor, elevator), false);
+    floor.push(Component{ name: "four", component_type: ComponentType::Chip });
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), false);
     floor.clear();
 
     floor.push(Component{ name: "one", component_type: ComponentType::Generator });
@@ -363,11 +349,9 @@ fn test_floor_is_safe() {
     floor.push(Component{ name: "two", component_type: ComponentType::Chip });
     floor.push(Component{ name: "two", component_type: ComponentType::Generator });
     floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    let elevator = Elevator{
-        slot_one: Some(Component{ name: "four", component_type: ComponentType::Chip }),
-        slot_two: Some(Component{ name: "four", component_type: ComponentType::Generator }),
-    };
-    let elevator = Some(&elevator);
-    assert_eq!(floor_is_safe(&floor, elevator), true);
+    floor.push(Component{ name: "four", component_type: ComponentType::Chip });
+    floor.push(Component{ name: "four", component_type: ComponentType::Generator });
+    floor.sort_by(|a, b| a.name.cmp(b.name));
+    assert_eq!(floor_is_safe(&floor), true);
     floor.clear();
 }
