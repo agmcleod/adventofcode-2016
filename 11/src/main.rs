@@ -55,8 +55,90 @@ fn as_string<'a>(node_state: &NodeState<'a>) -> String {
 
 fn build_nodes<'a>(first_state: NodeState<'a>) -> Node<'a> {
     let mut node_usage: HashMap<String, bool> = HashMap::new();
-    let node = Node::new(first_state, 0);
-    let node = next_node(node, &mut node_usage);
+    let mut node = Node::new(first_state, 0);
+    let mut working_set: Vec<&mut Node<'a>> = vec![&mut node];
+    loop {
+        let mut next_set: Vec<&mut Node<'a>> = Vec::with_capacity(10);
+        for node in working_set {
+            let move_possibilities;
+            {
+                move_possibilities = get_safe_things_to_move(&node.node_state[node.elevator]);
+            }
+
+            if node.node_state[3].len() == FLOOR_SPACES {
+                continue
+            }
+
+            let mut possible_floors: Vec<usize> = Vec::with_capacity(2);
+
+            if node.elevator == 0 {
+                possible_floors.push(1);
+            } else if node.elevator == 3 {
+                possible_floors.push(2);
+            } else {
+                possible_floors.push(node.elevator - 1);
+                possible_floors.push(node.elevator + 1);
+            }
+
+            let mut move_possibilities: Vec<Vec<Component<'a>>> = move_possibilities.iter().filter(|possibility| {
+                let floor_without_selected = node.node_state[node.elevator].iter().filter(|&component| !possibility.contains(component)).cloned().collect();
+                floor_is_safe(&floor_without_selected)
+            }).cloned().collect();
+
+            let mut connected_nodes: Vec<Node<'a>> = Vec::new();
+
+            for floor_index in possible_floors {
+                let ref floor = node.node_state[floor_index];
+                if floor.len() == FLOOR_SPACES {
+                    continue
+                }
+                for possibility in move_possibilities.iter_mut() {
+                    for component in possibility.iter_mut() {
+                        let mut floor = floor.clone();
+                        floor.push(*component);
+                        let mut node_state = build_node_state(&node.node_state, floor, floor_index);
+                        let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
+                        node_state[node.elevator].remove(to_remove_index);
+                        let node_string = as_string(&node_state);
+                        if !node_usage.contains_key(&node_string) {
+                            let node = Node::new(node_state, floor_index);
+                            connected_nodes.push(node);
+                            node_usage.insert(node_string, true);
+                        }
+                    }
+
+                    if possibility.len() > 1 && floor.len() <= FLOOR_SPACES - possibility.len() {
+                        let mut floor = floor.clone();
+                        for component in possibility.iter_mut() {
+                            floor.push(*component);
+                        }
+
+                        let mut node_state = build_node_state(&node.node_state, floor, floor_index);
+
+                        for component in possibility.iter_mut() {
+                            let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
+                            node_state[node.elevator].remove(to_remove_index);
+                        }
+
+                        let node_string = as_string(&node_state);
+                        if !node_usage.contains_key(&node_string) {
+                            let node = Node::new(node_state, floor_index);
+                            connected_nodes.push(node);
+                            node_usage.insert(node_string, true);
+                        }
+                    }
+                }
+            }
+
+            for sub_node in connected_nodes {
+                node.connected_nodes.push(sub_node);
+                next_set.push(&mut sub_node);
+            }
+        }
+
+        working_set = next_set;
+    }
+
     node
 }
 
@@ -70,86 +152,6 @@ fn build_node_state<'a>(existing_node_state: &NodeState<'a>, modified_floor: Flo
     new_node_state[floor_index] = modified_floor;
 
     new_node_state
-}
-
-fn next_node<'a>(node: Node<'a>, node_usage: &mut HashMap<String, bool>) -> Node<'a> {
-    let move_possibilities;
-    {
-        move_possibilities = get_safe_things_to_move(&node.node_state[node.elevator]);
-    }
-
-    if node.node_state[3].len() == FLOOR_SPACES {
-        return node
-    }
-
-    let mut possible_floors: Vec<usize> = Vec::with_capacity(2);
-
-    if node.elevator == 0 {
-        possible_floors.push(1);
-    } else if node.elevator == 3 {
-        possible_floors.push(2);
-    } else {
-        possible_floors.push(node.elevator - 1);
-        possible_floors.push(node.elevator + 1);
-    }
-
-    let mut move_possibilities: Vec<Vec<Component<'a>>> = move_possibilities.iter().filter(|possibility| {
-        let floor_without_selected = node.node_state[node.elevator].iter().filter(|&component| !possibility.contains(component)).cloned().collect();
-        floor_is_safe(&floor_without_selected)
-    }).cloned().collect();
-
-    let mut connected_nodes: Vec<Node<'a>> = Vec::new();
-
-    for floor_index in possible_floors {
-        let ref floor = node.node_state[floor_index];
-        if floor.len() == FLOOR_SPACES {
-            continue
-        }
-        for possibility in move_possibilities.iter_mut() {
-            for component in possibility.iter_mut() {
-                let mut floor = floor.clone();
-                floor.push(*component);
-                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
-                let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
-                node_state[node.elevator].remove(to_remove_index);
-                let node_string = as_string(&node_state);
-                if !node_usage.contains_key(&node_string) {
-                    let node = Node::new(node_state, floor_index);
-                    connected_nodes.push(node);
-                    node_usage.insert(node_string, true);
-                }
-            }
-
-            if possibility.len() > 1 && floor.len() <= FLOOR_SPACES - possibility.len() {
-                let mut floor = floor.clone();
-                for component in possibility.iter_mut() {
-                    floor.push(*component);
-                }
-
-                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
-
-                for component in possibility.iter_mut() {
-                    let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
-                    node_state[node.elevator].remove(to_remove_index);
-                }
-
-                let node_string = as_string(&node_state);
-                if !node_usage.contains_key(&node_string) {
-                    let node = Node::new(node_state, floor_index);
-                    connected_nodes.push(node);
-                    node_usage.insert(node_string, true);
-                }
-            }
-        }
-    }
-
-    let mut node = node;
-
-    for sub_node in connected_nodes {
-        node.connected_nodes.push(next_node(sub_node, node_usage));
-    }
-
-    node
 }
 
 fn get_safe_things_to_move<'a>(floor: &Floor<'a>) -> Vec<Vec<Component<'a>>> {
