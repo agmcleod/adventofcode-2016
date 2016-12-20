@@ -68,21 +68,23 @@ fn adjacents(current: usize, count: usize, floors: Vec<Floor>, seen_states: &mut
 
         for combo in combinations.iter_mut() {
             let mut next_floors = floors.clone();
+            println!("\nnext: {:?}\ncombos: {:?}", next_floors[current], combo);
             next_floors[current] = floors.get(current).unwrap().iter().filter(|c|
                 combo.iter().fold(true, |acc, combo_component|
                     if acc && combo_component.name == c.name && combo_component.c_type == c.c_type {
                         false
                     } else {
-                        true
+                        acc
                     }
                 )
             ).cloned().collect();
+            println!("= {:?}", next_floors[current]);
             next_floors[new_floor] = floors.get(new_floor).unwrap().iter().filter(|c|
                 combo.iter().fold(true, |acc, combo_component|
                     if acc && combo_component.name == c.name && combo_component.c_type == c.c_type {
                         false
                     } else {
-                        true
+                        acc
                     }
                 )
             ).cloned().collect();
@@ -144,7 +146,6 @@ fn search(floors: Vec<Floor>, goal: usize, seen_states: &mut HashMap<String, boo
     let groups = get_groups(&floors);
     seen_states.insert(groups, true);
     let moves = adjacents(0, 0, floors, seen_states);
-    println!("{:?}", moves);
     for m in moves {
         next_moves.push(m);
     }
@@ -152,6 +153,7 @@ fn search(floors: Vec<Floor>, goal: usize, seen_states: &mut HashMap<String, boo
     let mut move_count = 0;
     loop {
         let mut more_moves: Option<Vec<Move>> = None;
+        println!("{}", next_moves.len());
         for m in next_moves.iter_mut() {
             if m.count > move_count {
                 move_count = m.count;
@@ -209,7 +211,7 @@ fn main() {
         }
 
         for chip in chips {
-            floor.push(Component{ id: count, name: String::from(chip.split("-").next().unwrap()), c_type: ComponentType::Gen });
+            floor.push(Component{ id: count, name: String::from(chip.split("-").next().unwrap()), c_type: ComponentType::Chip });
             count += 1;
         }
 
