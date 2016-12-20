@@ -1,9 +1,10 @@
 extern crate read_input;
 extern crate init_with;
 use init_with::InitWith;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
-const NUM_OF_PAIRS: usize = 5;
+const NUM_OF_PAIRS: usize = 7;
 
 #[derive(Clone, Debug, PartialEq)]
 enum ComponentType {
@@ -13,7 +14,6 @@ enum ComponentType {
 
 #[derive(Clone, Debug)]
 struct Component {
-    id: usize,
     name: String,
     c_type: ComponentType,
 }
@@ -56,8 +56,8 @@ fn adjacents(current: usize, count: usize, floors: Vec<Floor>, seen_states: &mut
         possible_floors.push(current + 1);
     }
 
-    for new_floor in possible_floors {
-        let delta: i16 = (current as i16) - (new_floor as i16);
+    let deltas: [i16; 2] = [-1, 1];
+    for delta in deltas.iter() {
         combinations.sort_by(|a, b| {
             let mut a_len: i16 = a.len() as i16;
             let mut b_len: i16 = b.len() as i16;
@@ -66,9 +66,15 @@ fn adjacents(current: usize, count: usize, floors: Vec<Floor>, seen_states: &mut
             a_len.cmp(&b_len)
         });
 
+        let new_floor = current as i16 + delta;
+        if new_floor < 0 || new_floor > 3 {
+            continue
+        }
+
+        let new_floor: usize = new_floor as usize;
+
         for combo in combinations.iter_mut() {
             let mut next_floors = floors.clone();
-            println!("\nnext: {:?}\ncombos: {:?}", next_floors[current], combo);
             next_floors[current] = floors.get(current).unwrap().iter().filter(|c|
                 combo.iter().fold(true, |acc, combo_component|
                     if acc && combo_component.name == c.name && combo_component.c_type == c.c_type {
@@ -78,21 +84,16 @@ fn adjacents(current: usize, count: usize, floors: Vec<Floor>, seen_states: &mut
                     }
                 )
             ).cloned().collect();
-            println!("= {:?}", next_floors[current]);
-            next_floors[new_floor] = floors.get(new_floor).unwrap().iter().filter(|c|
-                combo.iter().fold(true, |acc, combo_component|
-                    if acc && combo_component.name == c.name && combo_component.c_type == c.c_type {
-                        false
-                    } else {
-                        acc
-                    }
-                )
-            ).cloned().collect();
+
+            for combo_component in combo {
+                next_floors[new_floor].push(combo_component.clone());
+            }
+
             if state_is_invalid(&next_floors) {
                 continue
             }
 
-            let groups = get_groups(&next_floors);
+            let groups = format!("{}{}", new_floor, get_groups(&next_floors));
             if !seen_states.contains_key(&groups) {
                 seen_states.insert(groups, true);
                 let next_move = Move::new(new_floor, count+1, next_floors);
@@ -136,35 +137,53 @@ fn get_groups(floors: &Vec<Floor>) -> String {
         index += 1;
     }
 
+    results.sort_by(|a, b|
+        if a.len() == 0 {
+            Ordering::Less
+        } else if b.len() == 0 {
+            Ordering::Greater
+        } else {
+            a[0].cmp(&b[0])
+        }
+    );
+
     results.iter().map(|pair| {
         pair.iter().map(|&v| v.to_string()).collect::<Vec<String>>().join("")
-    }).collect::<Vec<String>>().join("\n")
+    }).collect::<Vec<String>>().join("")
 }
 
 fn search(floors: Vec<Floor>, goal: usize, seen_states: &mut HashMap<String, bool>) -> usize {
-    let mut next_moves: Vec<Move> = Vec::with_capacity(1000);
+    let mut next_moves: Vec<Move> = Vec::with_capacity(5);
     let groups = get_groups(&floors);
-    seen_states.insert(groups, true);
+    seen_states.insert(format!("{}{}", 0, groups), true);
     let moves = adjacents(0, 0, floors, seen_states);
     for m in moves {
         next_moves.push(m);
     }
 
     let mut move_count = 0;
-    loop {
+    'outer: loop {
         let mut more_moves: Option<Vec<Move>> = None;
-        println!("{}", next_moves.len());
         for m in next_moves.iter_mut() {
             if m.count > move_count {
                 move_count = m.count;
             }
 
             if m.floors.get(3).unwrap().len() == goal {
-                println!("comps: {:?}", m.floors.get(3).unwrap());
-                return move_count;
+                break 'outer;
             }
-
-            more_moves = Some(adjacents(m.floor, m.count, m.floors.clone(), seen_states));
+            let adjacent_results = adjacents(m.floor, m.count, m.floors.clone(), seen_states);
+            more_moves = match more_moves {
+                Some(mut mm) => {
+                    for r in adjacent_results {
+                        mm.push(r);
+                    }
+                    Some(mm)
+                },
+                None => {
+                    Some(adjacent_results)
+                }
+            };
         }
 
         next_moves = match more_moves {
@@ -198,7 +217,7 @@ fn main() {
 
     let mut count = 0;
 
-    let floors: Vec<Floor> = text.lines().map(|line| {
+    let mut floors: Vec<Floor> = text.lines().map(|line| {
         let stuff: Vec<&str> = line.split("a ").map(|bit| bit.trim()).collect();
         let generators: Vec<&str> = stuff.iter().filter(|&s| s.contains("generator")).cloned().collect();
         let chips: Vec<&str> = stuff.iter().filter(|&s| s.contains("microchip")).cloned().collect();
@@ -206,12 +225,12 @@ fn main() {
         let mut floor: Floor = Vec::with_capacity(stuff.len());
 
         for gen in generators {
-            floor.push(Component{ id: count, name: String::from(gen.split(" ").next().unwrap()), c_type: ComponentType::Gen });
+            floor.push(Component{ name: String::from(gen.split(" ").next().unwrap()), c_type: ComponentType::Gen });
             count += 1;
         }
 
         for chip in chips {
-            floor.push(Component{ id: count, name: String::from(chip.split("-").next().unwrap()), c_type: ComponentType::Chip });
+            floor.push(Component{ name: String::from(chip.split("-").next().unwrap()), c_type: ComponentType::Chip });
             count += 1;
         }
 
@@ -219,5 +238,12 @@ fn main() {
     }).collect();
 
     let mut seen_states: HashMap<String, bool> = HashMap::new();
-    println!("Moves {} to obtain goal: {}", search(floors, count, &mut seen_states), count);
+    println!("Moves {} to obtain goal: {}", search(floors.clone(), count, &mut seen_states), count);
+
+    let mut seen_states: HashMap<String, bool> = HashMap::new();
+    floors[0].push(Component{ name: String::from("elerium"), c_type: ComponentType::Gen });
+    floors[0].push(Component{ name: String::from("elerium"), c_type: ComponentType::Chip });
+    floors[0].push(Component{ name: String::from("dilithium"), c_type: ComponentType::Gen });
+    floors[0].push(Component{ name: String::from("dilithium"), c_type: ComponentType::Chip });
+    println!("Moves {} to obtain goal: {}", search(floors, count + 4, &mut seen_states), count);
 }
