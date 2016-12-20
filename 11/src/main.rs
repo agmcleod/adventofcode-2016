@@ -1,234 +1,211 @@
 extern crate read_input;
 extern crate init_with;
 use init_with::InitWith;
-
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+const NUM_OF_PAIRS: usize = 7;
+
+#[derive(Clone, Debug, PartialEq)]
 enum ComponentType {
-    Chip, Generator
+    Chip,
+    Gen,
 }
 
-#[derive(Copy, Clone, Debug)]
-struct Component<'a> {
-    id: usize,
-    name: &'a str,
-    component_type: ComponentType,
+#[derive(Clone, Debug)]
+struct Component {
+    name: String,
+    c_type: ComponentType,
 }
 
-impl<'a> PartialEq for Component<'a> {
-    fn eq(&self, other: &Component) -> bool {
-        self.name == other.name && self.component_type == other.component_type
+type Floor = Vec<Component>;
+
+#[derive(Debug)]
+struct Move {
+    floor: usize,
+    count: usize,
+    floors: Vec<Floor>,
+}
+
+impl Move {
+    fn new(floor: usize, count: usize, floors: Vec<Floor>) -> Move {
+        Move{ floor: floor, count: count, floors: floors }
     }
 }
 
-const FLOOR_SPACES: usize = 10;
-const FLOORS: usize = 4;
+fn adjacents(current: usize, count: usize, floors: Vec<Floor>, seen_states: &mut HashMap<String, bool>) -> Vec<Move> {
+    let mut moves: Vec<Move> = Vec::new();
+    let mut combinations: Vec<Vec<Component>> = Vec::with_capacity(10);
+    let floor = floors.get(current).unwrap();
 
-type Floor<'a> = Vec<Component<'a>>;
-
-type NodeState<'a> = [Floor<'a>; FLOORS];
-
-struct Node<'a> {
-    connected_nodes: Vec<Node<'a>>,
-    node_state: NodeState<'a>,
-    elevator: usize,
-}
-
-impl<'a> Node<'a> {
-    fn new(node_state: NodeState<'a>, elevator: usize) -> Node<'a> {
-        let mut node = Node{ connected_nodes: Vec::new(), node_state: node_state, elevator: elevator };
-        for floor in node.node_state.iter_mut() {
-            floor.sort_by(|a, b| a.name.cmp(b.name));
+    for (i, component) in floor.iter().enumerate() {
+        combinations.push(vec![component.clone()]);
+        for component_two in &floor[i+1..] {
+            combinations.push(vec![component.clone(), component_two.clone()]);
         }
-        node
-    }
-}
-
-fn as_string<'a>(node_state: &NodeState<'a>) -> String {
-    node_state.iter().map(|floor| {
-        floor.iter().map(|component| {
-            component.id.to_string()
-        }).collect::<Vec<String>>().join("")
-    }).collect::<Vec<String>>().join("")
-}
-
-fn build_nodes<'a>(first_state: NodeState<'a>) -> Node<'a> {
-    let mut node_usage: HashMap<String, bool> = HashMap::new();
-    let mut node = Node::new(first_state, 0);
-    let mut working_set: Vec<&mut Node<'a>> = vec![&mut node];
-    loop {
-        let mut next_set: Vec<&mut Node<'a>> = Vec::with_capacity(10);
-        for node in working_set {
-
-        }
-
-        working_set = next_set;
-    }
-
-    node
-}
-
-fn get_sub_nodes<'a>(node: Node<'a>) -> Vec<Vec<Component<'a>>> {
-    let move_possibilities;
-    {
-        move_possibilities = get_safe_things_to_move(&node.node_state[node.elevator]);
-    }
-
-    if node.node_state[3].len() == FLOOR_SPACES {
-        continue
     }
 
     let mut possible_floors: Vec<usize> = Vec::with_capacity(2);
 
-    if node.elevator == 0 {
+    if current == 0 {
         possible_floors.push(1);
-    } else if node.elevator == 3 {
+    } else if current == 3 {
         possible_floors.push(2);
     } else {
-        possible_floors.push(node.elevator - 1);
-        possible_floors.push(node.elevator + 1);
+        possible_floors.push(current - 1);
+        possible_floors.push(current + 1);
     }
 
-    let mut move_possibilities: Vec<Vec<Component<'a>>> = move_possibilities.iter().filter(|possibility| {
-        let floor_without_selected = node.node_state[node.elevator].iter().filter(|&component| !possibility.contains(component)).cloned().collect();
-        floor_is_safe(&floor_without_selected)
-    }).cloned().collect();
+    let deltas: [i16; 2] = [-1, 1];
+    for delta in deltas.iter() {
+        combinations.sort_by(|a, b| {
+            let mut a_len: i16 = a.len() as i16;
+            let mut b_len: i16 = b.len() as i16;
+            a_len *= -delta;
+            b_len *= -delta;
+            a_len.cmp(&b_len)
+        });
 
-    let mut connected_nodes: Vec<Node<'a>> = Vec::new();
-
-    for floor_index in possible_floors {
-        let ref floor = node.node_state[floor_index];
-        if floor.len() == FLOOR_SPACES {
+        let new_floor = current as i16 + delta;
+        if new_floor < 0 || new_floor > 3 {
             continue
         }
-        for possibility in move_possibilities.iter_mut() {
-            for component in possibility.iter_mut() {
-                let mut floor = floor.clone();
-                floor.push(*component);
-                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
-                let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
-                node_state[node.elevator].remove(to_remove_index);
-                let node_string = as_string(&node_state);
-                if !node_usage.contains_key(&node_string) {
-                    let node = Node::new(node_state, floor_index);
-                    connected_nodes.push(node);
-                    node_usage.insert(node_string, true);
-                }
+
+        let new_floor: usize = new_floor as usize;
+
+        for combo in combinations.iter_mut() {
+            let mut next_floors = floors.clone();
+            next_floors[current] = floors.get(current).unwrap().iter().filter(|c|
+                combo.iter().fold(true, |acc, combo_component|
+                    if acc && combo_component.name == c.name && combo_component.c_type == c.c_type {
+                        false
+                    } else {
+                        acc
+                    }
+                )
+            ).cloned().collect();
+
+            for combo_component in combo {
+                next_floors[new_floor].push(combo_component.clone());
             }
 
-            if possibility.len() > 1 && floor.len() <= FLOOR_SPACES - possibility.len() {
-                let mut floor = floor.clone();
-                for component in possibility.iter_mut() {
-                    floor.push(*component);
-                }
+            if state_is_invalid(&next_floors) {
+                continue
+            }
 
-                let mut node_state = build_node_state(&node.node_state, floor, floor_index);
+            let groups = format!("{}{}", new_floor, get_groups(&next_floors));
+            if !seen_states.contains_key(&groups) {
+                seen_states.insert(groups, true);
+                let next_move = Move::new(new_floor, count+1, next_floors);
+                moves.push(next_move);
+            }
+        }
+    }
+    moves
+}
 
-                for component in possibility.iter_mut() {
-                    let to_remove_index = node_state[node.elevator].iter().position(|&c| c.name == component.name).unwrap();
-                    node_state[node.elevator].remove(to_remove_index);
-                }
+fn get_groups(floors: &Vec<Floor>) -> String {
+    let mut results = {
+        let pair = Vec::with_capacity(2);
+        <[Vec<usize>; NUM_OF_PAIRS]>::init_with(|| {
+            pair.clone()
+        })
+    };
+    let mut names: Vec<String> = Vec::with_capacity(NUM_OF_PAIRS);
 
-                let node_string = as_string(&node_state);
-                if !node_usage.contains_key(&node_string) {
-                    let node = Node::new(node_state, floor_index);
-                    connected_nodes.push(node);
-                    node_usage.insert(node_string, true);
-                }
+    for floor in floors {
+        for c in floor {
+            if !names.contains(&c.name) {
+                names.push(c.name.clone());
             }
         }
     }
 
-    for sub_node in connected_nodes {
-        node.connected_nodes.push(sub_node);
-        next_set.push(&mut sub_node);
-    }
-}
-
-fn build_node_state<'a>(existing_node_state: &NodeState<'a>, modified_floor: Floor<'a>, floor_index: usize) -> NodeState<'a> {
-    let mut new_node_state: NodeState<'a> = [
-        existing_node_state[0].clone(),
-        existing_node_state[1].clone(),
-        existing_node_state[2].clone(),
-        existing_node_state[3].clone()
-    ];
-    new_node_state[floor_index] = modified_floor;
-
-    new_node_state
-}
-
-fn get_safe_things_to_move<'a>(floor: &Floor<'a>) -> Vec<Vec<Component<'a>>> {
-    let mut things: Vec<Vec<Component<'a>>> = Vec::with_capacity(FLOOR_SPACES);
-    if floor.len() <= 1 {
-        return things
-    }
-
-    for (i, component) in floor.iter().enumerate() {
-        for component_two in &floor[i+1..] {
-            if component.component_type != component_two.component_type {
-                if component.name == component_two.name {
-                    things.push(vec![*component, *component_two]);
-                }
-            } else {
-                things.push(vec![*component, *component_two]);
+    let mut index = 0;
+    for name in names {
+        let mut pair: Vec<usize> = Vec::with_capacity(2);
+        for (i, floor) in floors.iter().enumerate() {
+            if floor.iter().filter(|c| c.name == name && c.c_type == ComponentType::Gen).count() > 0 {
+                pair.push(i);
+            }
+            if floor.iter().filter(|c| c.name == name && c.c_type == ComponentType::Chip).count() > 0 {
+                pair.push(i);
             }
         }
+        results[index] = pair;
+        index += 1;
     }
 
-    things
-}
-
-fn floor_is_safe(floor: &Floor) -> bool {
-    let generator_count = floor.iter().fold(0, |sum, component|
-        if component.component_type == ComponentType::Generator {
-            sum + 1
+    results.sort_by(|a, b|
+        if a.len() == 0 {
+            Ordering::Less
+        } else if b.len() == 0 {
+            Ordering::Greater
         } else {
-            sum
+            a[0].cmp(&b[0])
         }
     );
 
-    let mut it = floor.iter();
-    let mut component_one: Option<Component> = None;
+    results.iter().map(|pair| {
+        pair.iter().map(|&v| v.to_string()).collect::<Vec<String>>().join("")
+    }).collect::<Vec<String>>().join("")
+}
 
-    let mut is_safe = true;
-    let mut component_one_set = false;
-    loop {
-        if component_one_set {
-            component_one_set = false;
-        } else {
-            component_one = match it.next() {
-                Some(c) => Some(*c),
-                None => break,
+fn search(floors: Vec<Floor>, goal: usize, seen_states: &mut HashMap<String, bool>) -> usize {
+    let mut next_moves: Vec<Move> = Vec::with_capacity(5);
+    let groups = get_groups(&floors);
+    seen_states.insert(format!("{}{}", 0, groups), true);
+    let moves = adjacents(0, 0, floors, seen_states);
+    for m in moves {
+        next_moves.push(m);
+    }
+
+    let mut move_count = 0;
+    'outer: loop {
+        let mut more_moves: Option<Vec<Move>> = None;
+        for m in next_moves.iter_mut() {
+            if m.count > move_count {
+                move_count = m.count;
+            }
+
+            if m.floors.get(3).unwrap().len() == goal {
+                break 'outer;
+            }
+            let adjacent_results = adjacents(m.floor, m.count, m.floors.clone(), seen_states);
+            more_moves = match more_moves {
+                Some(mut mm) => {
+                    for r in adjacent_results {
+                        mm.push(r);
+                    }
+                    Some(mm)
+                },
+                None => {
+                    Some(adjacent_results)
+                }
             };
         }
 
-        let component_two = match it.next() {
-            Some(c) => *c,
-            None => {
-                if let Some(c1) = component_one {
-                    if c1.component_type == ComponentType::Chip && generator_count > 0 {
-                        is_safe = false;
-                    }
-                }
-                break
-            },
-        };
+        next_moves = match more_moves {
+            Some(more_moves) => more_moves,
+            None => break,
+        }
+    }
 
-        if let Some(c1) = component_one {
-            if c1.name != component_two.name {
-                if c1.component_type == ComponentType::Chip && generator_count > 0 {
-                    is_safe = false;
-                    break
-                } else {
-                    component_one = Some(component_two);
-                    component_one_set = true;
-                }
+    move_count
+}
+
+fn state_is_invalid(floors: &Vec<Floor>) -> bool {
+    for floor in floors {
+        let chips: Vec<&Component> = floor.iter().filter(|c| c.c_type == ComponentType::Chip).collect();
+        let gens: Vec<&Component> = floor.iter().filter(|c| c.c_type == ComponentType::Gen).collect();
+        for chip in chips {
+            if gens.len() > 0 && gens.iter().filter(|c| c.c_type == chip.c_type && c.name == chip.name).count() > 0 {
+                return true
             }
         }
     }
 
-    is_safe
+    false
 }
 
 fn main() {
@@ -237,127 +214,35 @@ fn main() {
         Err(e) => panic!("{:?}", e),
     };
 
-    let text = text.replace(",", "");
-    let text = text.replace(".", "");
+    let mut count = 0;
 
-    let mut first_state: NodeState = {
-        let data = Vec::with_capacity(FLOOR_SPACES);
-        <[Vec<Component>; FLOORS]>::init_with(|| {
-            data.clone()
-        })
-    };
+    let mut floors: Vec<Floor> = text.lines().map(|line| {
+        let stuff: Vec<&str> = line.split("a ").map(|bit| bit.trim()).collect();
+        let generators: Vec<&str> = stuff.iter().filter(|&s| s.contains("generator")).cloned().collect();
+        let chips: Vec<&str> = stuff.iter().filter(|&s| s.contains("microchip")).cloned().collect();
 
-    let mut id = 1;
+        let mut floor: Floor = Vec::with_capacity(stuff.len());
 
-    for (floor_index, line) in text.lines().enumerate() {
-        let mut words = line.split(" ").skip_while(|&w| w != "a" && w != "nothing");
-        if let Some(word) = words.next() {
-            if word == "nothing" {
-                continue
-            }
-        } else {
-            continue
+        for gen in generators {
+            floor.push(Component{ name: String::from(gen.split(" ").next().unwrap()), c_type: ComponentType::Gen });
+            count += 1;
         }
 
-        let mut floor: Floor = Vec::new();
-
-        while let Some(word) = words.next() {
-            if word == "generator" || word == "a" || word == "and" || word == "microchip" {
-                continue
-            }
-            let name;
-            let component_type = if word.contains("-") {
-                name = word.split("-").next().unwrap();
-                ComponentType::Chip
-            } else {
-                name = word;
-                ComponentType::Generator
-            };
-            floor.push(Component{ id: id, name: name, component_type: component_type });
-            id += 1;
+        for chip in chips {
+            floor.push(Component{ name: String::from(chip.split("-").next().unwrap()), c_type: ComponentType::Chip });
+            count += 1;
         }
 
-        first_state[floor_index] = floor;
-    }
+        floor
+    }).collect();
 
-    let nodes = build_nodes(first_state);
-}
+    let mut seen_states: HashMap<String, bool> = HashMap::new();
+    println!("Moves {} to obtain goal: {}", search(floors.clone(), count, &mut seen_states), count);
 
-#[test]
-fn test_floor_is_safe() {
-    let mut floor: Floor = Vec::with_capacity(FLOOR_SPACES);
-    assert_eq!(floor_is_safe(&floor), true);
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor), true);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    assert_eq!(floor_is_safe(&floor), false);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), false);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), true);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "three", component_type: ComponentType::Chip });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), false);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), true);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "four", component_type: ComponentType::Generator });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), true);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "four", component_type: ComponentType::Chip });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), false);
-    floor.clear();
-
-    floor.push(Component{ name: "one", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "one", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "two", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "three", component_type: ComponentType::Generator });
-    floor.push(Component{ name: "four", component_type: ComponentType::Chip });
-    floor.push(Component{ name: "four", component_type: ComponentType::Generator });
-    floor.sort_by(|a, b| a.name.cmp(b.name));
-    assert_eq!(floor_is_safe(&floor), true);
-    floor.clear();
+    let mut seen_states: HashMap<String, bool> = HashMap::new();
+    floors[0].push(Component{ name: String::from("elerium"), c_type: ComponentType::Gen });
+    floors[0].push(Component{ name: String::from("elerium"), c_type: ComponentType::Chip });
+    floors[0].push(Component{ name: String::from("dilithium"), c_type: ComponentType::Gen });
+    floors[0].push(Component{ name: String::from("dilithium"), c_type: ComponentType::Chip });
+    println!("Moves {} to obtain goal: {}", search(floors, count + 4, &mut seen_states), count);
 }
