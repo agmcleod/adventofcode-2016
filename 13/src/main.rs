@@ -1,25 +1,29 @@
-use std::cmp;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet, BinaryHeap};
 
-const GRID_ROWS: usize = 50;
-const GRID_COLS: usize = 40;
+const GRID_ROWS: usize = 45;
+const GRID_COLS: usize = 45;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum TileType {
-    Wall, Open, Used
+    Wall, Open
 }
 
-#[derive(Debug)]
-struct Tile {
-    cost_from_origin: i16,
-    cost_to_target: i16,
-    score: i16,
-    tile_type: TileType,
+#[derive(Copy, Clone, Eq, PartialEq)]
+struct Location {
+    position: (usize, usize),
+    cost: usize,
 }
 
-impl Copy for Tile {}
-impl Clone for Tile {
-    fn clone(&self) -> Tile {
-        *self
+impl Ord for Location {
+    fn cmp(&self, other: &Location) -> Ordering {
+        other.cost.cmp(&self.cost)
+    }
+}
+
+impl PartialOrd for Location {
+    fn partial_cmp(&self, other: &Location) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -29,9 +33,9 @@ fn is_coordinate_open(x: &usize, y: &usize) -> bool {
     n.count_ones() % 2 == 0
 }
 
-fn distance_to_target(x: usize, y: usize, target: &(usize, usize)) -> i16 {
-    let mut x_diff = x as i16 - target.0 as i16;
-    let mut y_diff = y as i16 - target.1 as i16;
+fn distance_to_target(location: &(usize, usize), target: &(usize, usize)) -> usize {
+    let mut x_diff = location.1 as i16 - target.1 as i16;
+    let mut y_diff = location.0 as i16 - target.0 as i16;
     if x_diff < 0 {
         x_diff *= -1;
     }
@@ -39,107 +43,110 @@ fn distance_to_target(x: usize, y: usize, target: &(usize, usize)) -> i16 {
         y_diff *= -1;
     }
 
-    x_diff + y_diff
+    x_diff as usize + y_diff as usize
 }
 
-fn get_next_position(pos: &(usize, usize), tiles: &[[Tile; GRID_COLS]; GRID_ROWS]) -> (usize, usize) {
-    let mut score = 10000;
-
-    let mut next_pos = (pos.0, pos.1);
+fn get_neighbours(pos: &(usize, usize), tiles: &[[TileType; GRID_COLS]; GRID_ROWS]) -> Vec<(usize, usize)> {
+    let mut neighbours: Vec<(usize, usize)> = Vec::with_capacity(4);
 
     if pos.0 > 0 {
-        let tile = &tiles[pos.1][pos.0 - 1];
-        if tile.tile_type == TileType::Open {
-            println!("{:?}", tile);
-            score = tile.score;
-            let (ref mut x, _) = next_pos;
-            *x = pos.0 - 1;
+        let tile_type = &tiles[pos.1][pos.0 - 1];
+        if *tile_type == TileType::Open {
+            neighbours.push((pos.0 - 1, pos.1));
         }
     }
 
     if pos.0 < GRID_COLS - 1 {
-        let tile = &tiles[pos.1][pos.0 + 1];
-
-        if tile.tile_type == TileType::Open && tile.score == cmp::min(tile.score, score) {
-            println!("{:?}", tile);
-            score = tile.score;
-            let (ref mut x, _) = next_pos;
-            *x = pos.0 + 1;
+        let tile_type = &tiles[pos.1][pos.0 + 1];
+        if *tile_type == TileType::Open {
+            neighbours.push((pos.0 + 1, pos.1));
         }
     }
 
     if pos.1 > 0 {
-        let tile = &tiles[pos.1 - 1][pos.0];
-        if tile.tile_type == TileType::Open && tile.score == cmp::min(tile.score, score) {
-            println!("{:?}", tile);
-            score = tile.score;
-            let (_, ref mut y) = next_pos;
-            *y = pos.1 - 1;
+        let tile_type = &tiles[pos.1 - 1][pos.0];
+        if *tile_type == TileType::Open {
+            neighbours.push((pos.0, pos.1 - 1));
         }
     }
 
     if pos.1 < GRID_ROWS - 1 {
-        let tile = &tiles[pos.1 + 1][pos.0];
-        if tile.tile_type == TileType::Open && tile.score == cmp::min(tile.score, score) {
-            println!("{:?}", tile);
-            let (_, ref mut y) = next_pos;
-            *y = pos.1 + 1;
+        let tile_type = &tiles[pos.1 + 1][pos.0];
+        if *tile_type == TileType::Open {
+            neighbours.push((pos.0, pos.1 + 1));
         }
     }
 
-    if next_pos.0 == pos.0 && next_pos.1 == pos.1 {
-        panic!("Position was unchanged for: {}, {}", next_pos.0, next_pos.1);
-    }
-
-    next_pos
+    neighbours
 }
 
 fn main() {
     let target = (31, 39);
-    let mut pos = (0, 0);
-    let mut tiles = [[Tile{ cost_from_origin: 0, cost_to_target: 0, score: 0, tile_type: TileType::Wall }; GRID_COLS]; GRID_ROWS];
+    let mut tiles = [[TileType::Wall; GRID_COLS]; GRID_ROWS];
 
     for (y, row) in tiles.iter_mut().enumerate() {
-        for (x, tile) in row.iter_mut().enumerate() {
+        for (x, tile_type) in row.iter_mut().enumerate() {
             if is_coordinate_open(&x, &y) {
-                if x == 0 && y == 0 {
-                    tile.tile_type = TileType::Used;
-                } else {
-                    tile.tile_type = TileType::Open;
-                }
-
-                tile.cost_to_target = distance_to_target(x, y, &target);
-                tile.cost_from_origin = distance_to_target(x, y, &pos);
-                tile.score = tile.cost_to_target + tile.cost_from_origin;
-            } else {
-                tile.tile_type = TileType::Wall;
+                *tile_type = TileType::Open;
             }
         }
     }
 
-    for row in tiles.iter() {
-        println!("{}", row.iter().map(|tile|
-            if tile.tile_type == TileType::Wall {
+    let mut closed: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+    let mut costs: HashMap<(usize, usize), usize> = HashMap::new();
+    costs.insert((1, 1), 0);
+
+    let mut heap = BinaryHeap::new();
+    heap.push(Location{ position: (1, 1), cost: 0 });
+
+    let mut tracked_positions: Vec<(usize, usize)> = Vec::new();
+    let mut scanned_locations: HashSet<(usize, usize)> = HashSet::new();
+    scanned_locations.insert((1, 1));
+
+    while let Some(location) = heap.pop() {
+        if location.position.0 == target.0 && location.position.1 == target.1 {
+            let mut pos = closed.get(&location.position).unwrap();
+            tracked_positions.push(location.position);
+            loop {
+                if let Some(p) = closed.get(&pos) {
+                    tracked_positions.push(*p);
+                    pos = p;
+                } else {
+                    break
+                }
+            }
+            break
+        }
+        let neighbours = get_neighbours(&location.position, &tiles);
+        for neighbour in neighbours {
+            let new_cost = costs.get(&location.position).unwrap() + 1;
+            if !costs.contains_key(&neighbour) || new_cost < *costs.get(&neighbour).unwrap() {
+                heap.push(Location{ position: neighbour, cost: new_cost + distance_to_target(&neighbour, &target) });
+                closed.insert(neighbour, location.position);
+                costs.insert(neighbour, new_cost);
+            }
+
+            if distance_to_target(&neighbour, &target) <= 50 {
+                scanned_locations.insert(neighbour);
+            }
+        }
+    }
+
+    for (y, row) in tiles.iter().enumerate() {
+        let mut x = 0;
+        println!("{}", row.iter().map(|tile_type| {
+            let pos = (x, y);
+            x += 1;
+            if *tile_type == TileType::Wall {
                 "#"
+            } else if tracked_positions.contains(&pos) {
+                "O"
             } else {
                 "."
             }
-        ).collect::<Vec<&str>>().join(""));
+        }).collect::<Vec<&str>>().join(""));
     }
 
-    let mut moves = 0;
-
-    loop {
-        let next_pos = get_next_position(&pos, &tiles);
-        pos = (next_pos.0, next_pos.1);
-        let ref mut tile = tiles[pos.1][pos.0];
-        tile.tile_type = TileType::Used;
-        println!("{}, {} {:?}", pos.0, pos.1, tile.tile_type);
-        moves += 1;
-        if pos.0 == target.0 && pos.1 == target.1 {
-            break
-        }
-    }
-
-    println!("{}", moves);
+    println!("{}", tracked_positions.len());
+    println!("{}", scanned_locations.len());
 }
