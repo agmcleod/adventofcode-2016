@@ -46,6 +46,23 @@ fn distance_to_target(location: &(usize, usize), target: &(usize, usize)) -> usi
     x_diff as usize + y_diff as usize
 }
 
+fn draw_tiles(tiles: &[[TileType; GRID_COLS]; GRID_ROWS], tracked_positions: &Vec<(usize, usize)>) {
+    for (y, row) in tiles.iter().enumerate() {
+        let mut x = 0;
+        println!("{}", row.iter().map(|tile_type| {
+            let pos = (x, y);
+            x += 1;
+            if *tile_type == TileType::Wall {
+                "#"
+            } else if tracked_positions.contains(&pos) {
+                "O"
+            } else {
+                "."
+            }
+        }).collect::<Vec<&str>>().join(""));
+    }
+}
+
 fn get_neighbours(pos: &(usize, usize), tiles: &[[TileType; GRID_COLS]; GRID_ROWS]) -> Vec<(usize, usize)> {
     let mut neighbours: Vec<(usize, usize)> = Vec::with_capacity(4);
 
@@ -80,18 +97,7 @@ fn get_neighbours(pos: &(usize, usize), tiles: &[[TileType; GRID_COLS]; GRID_ROW
     neighbours
 }
 
-fn main() {
-    let target = (31, 39);
-    let mut tiles = [[TileType::Wall; GRID_COLS]; GRID_ROWS];
-
-    for (y, row) in tiles.iter_mut().enumerate() {
-        for (x, tile_type) in row.iter_mut().enumerate() {
-            if is_coordinate_open(&x, &y) {
-                *tile_type = TileType::Open;
-            }
-        }
-    }
-
+fn map_path_to_target(tiles: &[[TileType; GRID_COLS]; GRID_ROWS], target: &(usize, usize)) -> Vec<(usize, usize)> {
     let mut closed: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
     let mut costs: HashMap<(usize, usize), usize> = HashMap::new();
     costs.insert((1, 1), 0);
@@ -100,12 +106,13 @@ fn main() {
     heap.push(Location{ position: (1, 1), cost: 0 });
 
     let mut tracked_positions: Vec<(usize, usize)> = Vec::new();
-    let mut scanned_locations: HashSet<(usize, usize)> = HashSet::new();
-    scanned_locations.insert((1, 1));
 
     while let Some(location) = heap.pop() {
         if location.position.0 == target.0 && location.position.1 == target.1 {
-            let mut pos = closed.get(&location.position).unwrap();
+            let mut pos = match closed.get(&location.position) {
+                Some(pos) => pos,
+                None => panic!("Could not find closed at {:?}", location.position),
+            };
             tracked_positions.push(location.position);
             loop {
                 if let Some(p) = closed.get(&pos) {
@@ -119,34 +126,56 @@ fn main() {
         }
         let neighbours = get_neighbours(&location.position, &tiles);
         for neighbour in neighbours {
-            let new_cost = costs.get(&location.position).unwrap() + 1;
+            let new_cost = match costs.get(&location.position) {
+                Some(c) => c + 1,
+                None => panic!("Could find cost at {:?}", location.position),
+            };
             if !costs.contains_key(&neighbour) || new_cost < *costs.get(&neighbour).unwrap() {
                 heap.push(Location{ position: neighbour, cost: new_cost + distance_to_target(&neighbour, &target) });
                 closed.insert(neighbour, location.position);
                 costs.insert(neighbour, new_cost);
             }
+        }
+    }
 
-            if distance_to_target(&neighbour, &target) <= 50 {
-                scanned_locations.insert(neighbour);
+    tracked_positions
+}
+
+fn main() {
+    let target = (31, 39);
+    let mut tiles = [[TileType::Wall; GRID_COLS]; GRID_ROWS];
+
+    for (y, row) in tiles.iter_mut().enumerate() {
+        for (x, tile_type) in row.iter_mut().enumerate() {
+            if is_coordinate_open(&x, &y) {
+                *tile_type = TileType::Open;
             }
         }
     }
 
-    for (y, row) in tiles.iter().enumerate() {
-        let mut x = 0;
-        println!("{}", row.iter().map(|tile_type| {
-            let pos = (x, y);
-            x += 1;
-            if *tile_type == TileType::Wall {
-                "#"
-            } else if tracked_positions.contains(&pos) {
-                "O"
-            } else {
-                "."
-            }
-        }).collect::<Vec<&str>>().join(""));
-    }
+    let tracked_positions = map_path_to_target(&tiles, &target);
 
     println!("{}", tracked_positions.len());
+
+    let mut scanned_locations: HashSet<(usize, usize)> = HashSet::new();
+    scanned_locations.insert((1, 1));
+    let mut steps = 1;
+
+    let mut locations: Vec<(usize, usize)> = vec![(1, 1)];
+    while steps <= 50 {
+        let mut temp_locations: Vec<(usize, usize)> = Vec::with_capacity(16); // 16 because potential 4 x 4
+        for location in locations {
+            let locations = get_neighbours(&location, &tiles);
+            for loc in locations {
+                if !scanned_locations.contains(&loc) {
+                    scanned_locations.insert(loc);
+                    temp_locations.push(loc);
+                }
+            }
+        }
+        locations = temp_locations;
+        steps += 1;
+    }
+
     println!("{}", scanned_locations.len());
 }
