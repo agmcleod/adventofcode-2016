@@ -77,11 +77,49 @@ fn try_position(door_letters: &[&str; 4], options_based_on_position: &HashMap<(u
             }
         }
 
-        if !new_options.len() > 0 {
+        if new_options.len() > 0 {
             options = new_options;
         }
 
         if finished {
+            break
+        }
+    }
+}
+
+fn try_p2(door_letters: &[&str; 4], options_based_on_position: &HashMap<(usize, usize), [Option<(usize, usize)>; GRID_SIZE]>) {
+    let mut md5 = Md5::new();
+
+    let mut options = vec![State{ path: Vec::new(), position: (0, 0), input: String::from("qtetzkpl") }];
+    loop {
+        let mut new_options: Vec<State> = Vec::with_capacity(options.len() * 4);
+        for state in &options {
+            let position = &state.position;
+            if position.0 == GRID_SIZE - 1 && position.1 == GRID_SIZE - 1 {
+                println!("{:?}", state.path.len());
+                continue
+            }
+            let next_value = get_md5(&mut md5, &state.input);
+            let positions = options_based_on_position.get(&(position.0, position.1)).unwrap();
+            for (i, ch) in next_value[0..GRID_SIZE].chars().enumerate() {
+                if door_is_open(&ch) {
+                    let position = positions[i];
+                    match position {
+                        Some(p) => {
+                            let mut appended_path = state.path.clone();
+                            appended_path.push(door_letters[i]);
+                            new_options.push(State{ path: appended_path, position: p, input: format!("{}{}", state.input, door_letters[i]) });
+                        },
+                        None => continue,
+                    }
+
+                }
+            }
+        }
+
+        if new_options.len() > 0 {
+            options = new_options;
+        } else {
             break
         }
     }
@@ -95,4 +133,5 @@ fn main() {
     build_options(&mut options_based_on_position);
 
     try_position(&door_letters, &options_based_on_position);
+    try_p2(&door_letters, &options_based_on_position);
 }
