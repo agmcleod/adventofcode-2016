@@ -1,9 +1,7 @@
 extern crate read_input;
-use read_input::read_text;
+use std::collections::HashMap;
 
-mod utils;
-mod part_two;
-
+use std;
 use utils::*;
 
 trait Command {
@@ -61,17 +59,18 @@ struct RotateFromLetter {
 impl Command for RotateFromLetter {
     fn apply(&self, data: &mut [u8]) {
         let mut data_v = data.to_vec();
-        let index = match data_v.iter().position(|n| *n == self.letter) {
+        let mut index = match data_v.iter().position(|n| *n == self.letter) {
             Some(index) => index,
             None => panic!("Letter not found for rotate: {:?} in {:?}", std::str::from_utf8(&[self.letter]), std::str::from_utf8(data)),
         };
-        let mut count = 1 + index;
-        if index >= 4 {
-            count += 1;
+
+        if index != 0 && index % 2 == 0 {
+            index += data_v.len();
         }
+        let count = (index / 2 + 1) % data_v.len();
 
         for _ in 0..count {
-            rotate_vec_right(&mut data_v);
+            rotate_vec_left(&mut data_v);
         }
 
         data.copy_from_slice(data_v.as_slice());
@@ -87,10 +86,10 @@ impl Command for Rotate {
     fn apply(&self, data: &mut [u8]) {
         let mut data_v = data.to_vec();
         for _ in 0..self.steps {
-            if self.direction == "right".to_string() {
-                rotate_vec_right(&mut data_v);
-            } else {
+            if self.direction == "left".to_string() {
                 rotate_vec_left(&mut data_v);
+            } else {
+                rotate_vec_right(&mut data_v);
             }
         }
 
@@ -122,19 +121,19 @@ fn get_command(line: &str) -> Option<Box<Command>> {
 
         return Some(Box::new(
             SwapPosition{
-                from: positions[0],
-                to: positions[1],
+                from: positions[1],
+                to: positions[0],
             }
         ))
     }
 
     if line.starts_with("swap letter") {
         let line = line.replace("swap letter ", "").replace("with letter", "");
-        let letters: Vec<u8> = line.split_whitespace().map(|v| v.as_bytes()[0] ).collect();
+        let letters: Vec<u8> = line.split_whitespace().map(|v| v.as_bytes()[0]).collect();
         return Some(Box::new(
             SwapLetter{
-                target: letters[0],
-                replacement: letters[1],
+                target: letters[1],
+                replacement: letters[0],
             }
         ))
     }
@@ -144,8 +143,8 @@ fn get_command(line: &str) -> Option<Box<Command>> {
 
         return Some(Box::new(
             MovePosition{
-                from: positions[0],
-                to: positions[1],
+                from: positions[1],
+                to: positions[0],
             }
         ))
     }
@@ -165,6 +164,12 @@ fn get_command(line: &str) -> Option<Box<Command>> {
         let steps = match line.split_whitespace().nth(2).unwrap().parse::<usize>() {
             Ok(n) => n,
             Err(_) => panic!("Could not parse num from: {}", line),
+        };
+
+        let direction = if direction == "left" {
+            "right"
+        } else {
+            "left"
         };
 
         return Some(Box::new(
@@ -189,24 +194,20 @@ fn get_command(line: &str) -> Option<Box<Command>> {
     None
 }
 
-fn main() {
-    let str_bytes = "abcdefgh".as_bytes();
+pub fn run_p2(input: &String) {
+    let str_bytes = "fbgdceah".as_bytes();
     let mut bytes: &mut[u8] = &mut [0u8; 8];
     bytes.clone_from_slice(str_bytes);
-    let input = match read_text("input.txt") {
-        Ok(t) => t,
-        Err(e) => panic!("{:?}", e),
-    };
 
-    for cmd in input.lines() {
+    for cmd in input.lines().rev() {
         if let Some(command) = get_command(cmd) {
+            let before = String::from_utf8(bytes.iter().cloned().collect::<Vec<u8>>()).unwrap();
             command.apply(&mut bytes);
+            println!("{} --- {} --- {}", before, cmd, String::from_utf8(bytes.iter().cloned().collect::<Vec<u8>>()).unwrap());
         } else {
             panic!("Could not find: {}", cmd);
         }
     }
 
     println!("{:?}", std::str::from_utf8(bytes));
-
-    part_two::run_p2(&input);
 }
