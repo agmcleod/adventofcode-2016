@@ -1,7 +1,7 @@
 extern crate regex;
 extern crate read_input;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use regex::Regex;
 
 #[derive(Debug)]
@@ -10,29 +10,166 @@ struct Node {
     size: usize,
     used: usize,
     avail: usize,
-    coords_as_num: Option<[usize; 2]>,
+    coords_as_num: [usize; 2],
 }
+
+impl Clone for Node {
+    fn clone(&self) -> Node {
+        Node{
+            coords: self.coords.clone(),
+            size: self.size.clone(),
+            used: self.used.clone(),
+            avail: self.avail.clone(),
+            coords_as_num: self.coords_as_num.clone(),
+        }
+    }
+}
+
+const MAX_X: usize = 36;
+const MAX_Y: usize = 24;
 
 impl Node {
     fn new(coords: String, size: String, used: String, avail: String) -> Node {
+        let mut num_coords = [0, 0];
+        for (i, n) in coords.replace("x", "").split("y").enumerate() {
+            num_coords[i] = n.parse().ok().expect("Could not parse n");
+        }
         Node{
             coords: coords,
             size: size.replace("T", "").parse().ok().expect("Failed to parse size"),
             used: used.replace("T", "").parse().ok().expect("Failed to parse used"),
             avail: avail.replace("T", "").parse().ok().expect("Failed to parse avail"),
-            coords_as_num: None,
+            coords_as_num: num_coords,
         }
     }
 
-    fn get_coords(&mut self) -> [usize; 2] {
-        if self.coords_as_num == None {
-            let mut coords = [0, 0];
-            for (i, n) in self.coords.replace("x", "").split("y").enumerate() {
-                coords[i] = n.parse().ok().expect("Could not parse n");
-            }
-            self.coords_as_num = Some(coords);
+    fn get_neighbours(&self) -> Vec<String> {
+        let mut neighbours: Vec<String> = Vec::new();
+
+        if self.coords_as_num[0] > 0 {
+            neighbours.push(format!("x{}y{}", self.coords_as_num[0] - 1, self.coords_as_num[1]));
         }
-        self.coords_as_num.unwrap()
+        if self.coords_as_num[1] > 0 {
+            neighbours.push(format!("x{}y{}", self.coords_as_num[0], self.coords_as_num[1] - 1));
+        }
+        if self.coords_as_num[0] < MAX_X {
+            neighbours.push(format!("x{}y{}", self.coords_as_num[0] + 1, self.coords_as_num[1]));
+        }
+        if self.coords_as_num[1] < MAX_Y {
+            neighbours.push(format!("x{}y{}", self.coords_as_num[0], self.coords_as_num[1] + 1));
+        }
+
+        neighbours
+    }
+}
+
+fn find_pairs_for_node(nodes: &HashMap<String, Node>, node: &Node) -> Vec<String> {
+    let mut pairs: Vec<String> = Vec::new();
+
+    for (key, node2) in nodes {
+        if *key != node.coords {
+            if node.used > 0 && node.used <= node2.avail {
+                pairs.push(node2.coords.clone());
+            }
+        }
+    }
+
+    pairs
+}
+
+// there's only one, this was overkill XD
+fn find_first_zero_space_node(nodes: & HashMap<String, Node>, from: &Node) -> Option<Node> {
+    let mut scan_list: Vec<&Node> = vec![from];
+    let mut used_list: HashSet<String> = HashSet::new();
+    loop {
+        let mut temp_list: Vec<&Node> = Vec::new();
+        let mut any_found = false;
+        for node in &scan_list {
+            let neighbours = node.get_neighbours();
+            for c in neighbours {
+                if used_list.contains(&c) {
+                    continue
+                }
+                any_found = true;
+                used_list.insert(c.clone());
+                let node = nodes.get(&c).unwrap();
+                if node.used == 0 {
+                    return Some((*node).clone());
+                }
+
+                temp_list.push(node);
+            }
+        }
+        scan_list = temp_list.clone();
+        if !any_found {
+            break
+        }
+    }
+
+    None
+}
+
+fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: &Node) -> (usize, String, HashMap<String, Node>) {
+    let mut scan_list: Vec<(String, HashMap<String, Node>)> = vec![(node.coords.clone(), nodes.clone())];
+    let mut used_list: HashSet<String> = HashSet::new();
+    let mut count = 1;
+    let mut result_state: HashMap<String, Node> = HashMap::new();
+    let mut last_move = String::new();
+    'main: loop {
+        let mut temp_list: Vec<(String, HashMap<String, Node>)> = Vec::new();
+        let mut any_found = false;
+        for state in &scan_list {
+            let node = state.1.get(&state.0).unwrap();
+            let neighbours = node.get_neighbours();
+            for c in neighbours {
+                let mut new_state = state.1.clone();
+                let mut new_stuff = {
+                    let neighbour = new_state.get(&c).unwrap();
+                    let node = new_state.get(&state.0).unwrap();
+                    // move on if node already scanned, or if either node can't fit the data
+                    if used_list.contains(&c) || neighbour.used > node.size || node.used > neighbour.size {
+                        continue
+                    }
+                    (neighbour.clone(), node.clone())
+                };
+                let neighbour_used = new_stuff.0.used;
+                let neighbour_coords = new_stuff.0.coords.clone();
+                new_stuff.0.used = new_stuff.1.used;
+                new_stuff.1.used = neighbour_used;
+                new_state.insert(new_stuff.0.coords.clone(), new_stuff.0);
+                new_state.insert(new_stuff.1.coords.clone(), new_stuff.1);
+
+                if neighbour_coords == target.coords {
+                    result_state = new_state;
+                    last_move = state.0.clone();
+                    break 'main
+                }
+
+                temp_list.push((neighbour_coords.clone(), new_state));
+                any_found = true;
+                used_list.insert(c.clone());
+            }
+        }
+        count += 1;
+        scan_list = temp_list.clone();
+        if !any_found {
+            println!("Ran out of options");
+            break
+        }
+    }
+
+    (count, last_move, result_state)
+}
+
+fn print_nodes(nodes: &HashMap<String, Node>) {
+    for y in 0..(MAX_Y+1) {
+        let mut row: Vec<String> = Vec::new();
+        for x in 0..(MAX_X+1) {
+            let node = nodes.get(&format!("x{}y{}", x, y)).unwrap();
+            row.push(format!("{}/{}", node.used, node.size));
+        }
+
+        println!("{}", row.join("|"));
     }
 }
 
@@ -55,21 +192,24 @@ fn main() {
         }
     }
 
-    let mut pairs: Vec<[String; 2]> = Vec::new();
+    let mut pairs: Vec<String> = Vec::new();
 
-    for (key, node) in &nodes {
-        for (key2, node2) in &nodes {
-            if key != key2 {
-                let pair = [node, node2];
-
-                if pair[0].used > 0 && pair[0].used <= pair[1].avail {
-                    let pair = [pair[0].coords.clone(), pair[1].coords.clone()];
-
-                    pairs.push(pair);
-                }
-            }
-        }
+    // part 1
+    for (_, node) in &nodes {
+        pairs.append(&mut find_pairs_for_node(&nodes, &node));
     }
 
-    println!("{:?}", pairs.len());
+    println!("part 1 pairs: {:?}", pairs.len());
+
+    if let Some(zero_space) = find_first_zero_space_node(&nodes, nodes.get(&format!("x{}y{}", MAX_X, 0)).unwrap()) {
+        println!("\n\nZero space node, from top right {:?}\n\n", zero_space);
+        let result = move_node_data_to_coords(&nodes, &zero_space, nodes.get(&format!("x{}y{}", MAX_X, 0)).unwrap());
+        println!("Count to move 0 to top right: {}", result.0);
+        println!("Moved data to: {}\n", result.1);
+        let data_node = result.2.get(&result.1).unwrap();
+
+        // NOTE TO SELF
+        // I think the next idea is to trace the path from the data to 0,0. Once i have that, use the 0 node to move the data one by one.
+    }
+
 }
