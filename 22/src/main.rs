@@ -161,6 +161,46 @@ fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: 
     (count, last_move, result_state)
 }
 
+fn get_path_for_data(nodes: &HashMap<String, Node>, data_coords: &String) -> Vec<String> {
+    let (mut scan_list, data_used) = {
+        let data_node = nodes.get(data_coords).unwrap();
+        (vec![(data_node.clone(), vec![data_node.coords.clone()])], data_node.used)
+    };
+    let mut used_list: HashSet<String> = HashSet::new();
+    let target_coords = "x0y0".to_string();
+
+    'main: loop {
+        let mut temp_list: Vec<(Node, Vec<String>)> = Vec::new();
+        let mut any_found = false;
+        for &(ref node, ref path) in &scan_list {
+            let neighbours = node.get_neighbours();
+            for neighbour_coord in neighbours {
+                if neighbour_coord == target_coords {
+                    return (*path).clone()
+                }
+                if used_list.contains(&neighbour_coord) {
+                    continue
+                }
+                used_list.insert(neighbour_coord.clone());
+                let neighbour = nodes.get(&neighbour_coord).unwrap();
+                if neighbour.size >= data_used {
+                    any_found = true;
+                    let mut path = (*path).clone();
+                    path.push(neighbour.coords.clone());
+                    temp_list.push((neighbour.clone(), path));
+                }
+            }
+        }
+
+        scan_list = temp_list;
+        if !any_found {
+            break
+        }
+    }
+
+    Vec::new()
+}
+
 fn print_nodes(nodes: &HashMap<String, Node>) {
     for y in 0..(MAX_Y+1) {
         let mut row: Vec<String> = Vec::new();
@@ -205,11 +245,12 @@ fn main() {
         println!("\n\nZero space node, from top right {:?}\n\n", zero_space);
         let result = move_node_data_to_coords(&nodes, &zero_space, nodes.get(&format!("x{}y{}", MAX_X, 0)).unwrap());
         println!("Count to move 0 to top right: {}", result.0);
-        println!("Moved data to: {}\n", result.1);
         let data_node = result.2.get(&result.1).unwrap();
+        println!("Moved data amount: {} to: {}\n", data_node.used, data_node.coords);
 
-        // NOTE TO SELF
-        // I think the next idea is to trace the path from the data to 0,0. Once i have that, use the 0 node to move the data one by one.
+
+        let path = get_path_for_data(&result.2, &data_node.coords);
+        println!("{:?}", path);
     }
 
 }
