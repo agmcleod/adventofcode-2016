@@ -109,23 +109,26 @@ fn find_first_zero_space_node(nodes: & HashMap<String, Node>, from: &Node) -> Op
     None
 }
 
-fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: &Node) -> (usize, String, HashMap<String, Node>) {
+fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: &String, used_list_data: Vec<String>) -> (usize, String, HashMap<String, Node>) {
     let mut scan_list: Vec<(String, HashMap<String, Node>)> = vec![(node.coords.clone(), nodes.clone())];
     let mut used_list: HashSet<String> = HashSet::new();
+    for n in used_list_data {
+        used_list.insert(n);
+    }
     let mut count = 1;
     let mut result_state: HashMap<String, Node> = HashMap::new();
     let mut last_move = String::new();
     'main: loop {
         let mut temp_list: Vec<(String, HashMap<String, Node>)> = Vec::new();
         let mut any_found = false;
-        for state in &scan_list {
-            let node = state.1.get(&state.0).unwrap();
+        for &(ref coords, ref state) in &scan_list {
+            let node = state.get(coords).unwrap();
             let neighbours = node.get_neighbours();
             for c in neighbours {
-                let mut new_state = state.1.clone();
+                let mut new_state = state.clone();
                 let mut new_stuff = {
                     let neighbour = new_state.get(&c).unwrap();
-                    let node = new_state.get(&state.0).unwrap();
+                    let node = new_state.get(coords).unwrap();
                     // move on if node already scanned, or if either node can't fit the data
                     if used_list.contains(&c) || neighbour.used > node.size || node.used > neighbour.size {
                         continue
@@ -139,9 +142,9 @@ fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: 
                 new_state.insert(new_stuff.0.coords.clone(), new_stuff.0);
                 new_state.insert(new_stuff.1.coords.clone(), new_stuff.1);
 
-                if neighbour_coords == target.coords {
+                if neighbour_coords == *target {
                     result_state = new_state;
-                    last_move = state.0.clone();
+                    last_move = coords.clone();
                     break 'main
                 }
 
@@ -164,7 +167,7 @@ fn move_node_data_to_coords(nodes: &HashMap<String, Node>, node: &Node, target: 
 fn get_path_for_data(nodes: &HashMap<String, Node>, data_coords: &String) -> Vec<String> {
     let (mut scan_list, data_used) = {
         let data_node = nodes.get(data_coords).unwrap();
-        (vec![(data_node.clone(), vec![data_node.coords.clone()])], data_node.used)
+        (vec![(data_node.clone(), Vec::new())], data_node.used)
     };
     let mut used_list: HashSet<String> = HashSet::new();
     let target_coords = "x0y0".to_string();
@@ -176,7 +179,9 @@ fn get_path_for_data(nodes: &HashMap<String, Node>, data_coords: &String) -> Vec
             let neighbours = node.get_neighbours();
             for neighbour_coord in neighbours {
                 if neighbour_coord == target_coords {
-                    return (*path).clone()
+                    let mut path = (*path).clone();
+                    path.push(neighbour_coord);
+                    return path
                 }
                 if used_list.contains(&neighbour_coord) {
                     continue
@@ -199,6 +204,17 @@ fn get_path_for_data(nodes: &HashMap<String, Node>, data_coords: &String) -> Vec
     }
 
     Vec::new()
+}
+
+fn move_data_node_to_index_of_path(nodes: &mut HashMap<String, Node>, data_node: &mut Node, zero_node: &mut Node, target_coords: &String, move_count: &mut usize) {
+    let (count, _, new_state) = move_node_data_to_coords(nodes, zero_node, target_coords, vec![data_node.coords.clone()]);
+    *move_count += count;
+
+    let (count, _, new_state) = move_node_data_to_coords(&new_state, data_node, target_coords, Vec::new());
+    *zero_node = new_state.get(&data_node.coords).unwrap().clone();
+    *data_node = new_state.get(target_coords).unwrap().clone();
+    *nodes = new_state;
+    *move_count += count;
 }
 
 fn print_nodes(nodes: &HashMap<String, Node>) {
@@ -243,14 +259,28 @@ fn main() {
 
     if let Some(zero_space) = find_first_zero_space_node(&nodes, nodes.get(&format!("x{}y{}", MAX_X, 0)).unwrap()) {
         println!("\n\nZero space node, from top right {:?}\n\n", zero_space);
-        let result = move_node_data_to_coords(&nodes, &zero_space, nodes.get(&format!("x{}y{}", MAX_X, 0)).unwrap());
-        println!("Count to move 0 to top right: {}", result.0);
-        let data_node = result.2.get(&result.1).unwrap();
+        let result = move_node_data_to_coords(&nodes, &zero_space, &format!("x{}y{}", MAX_X, 0), Vec::new());
+        println!("Count to move 0 to {} : {}", result.1, result.0);
+        let mut data_node = result.2.get(&result.1).unwrap().clone();
         println!("Moved data amount: {} to: {}\n", data_node.used, data_node.coords);
-
 
         let path = get_path_for_data(&result.2, &data_node.coords);
         println!("{:?}", path);
+        let mut zero_node = result.2.get(&format!("x{}y{}", MAX_X, 0)).unwrap().clone();
+        print_nodes(&result.2);
+
+        let mut state = result.2;
+        let mut move_count = 0;
+        let mut index = 0;
+        loop {
+            move_data_node_to_index_of_path(&mut state, &mut data_node, &mut zero_node, &path[index], &mut move_count);
+            index += 1;
+            if index == path.len() {
+                break
+            }
+        }
+
+        println!("Moved 0 count: {}, move data count: {}, total: {}", result.0, move_count, result.0 + move_count);
     }
 
 }
