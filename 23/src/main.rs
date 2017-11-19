@@ -26,7 +26,7 @@ fn process_input(input: &mut Vec<String>, a: i32, b: i32, c: i32, d: i32) -> i32
         {
             let mut it = input.iter().skip(start_index as usize);
             while let Some(line) = it.next() {
-                println!("Run: {} on {}", line, start_index);
+                // println!("Run: {} on {}", line, start_index);
                 let mut cmd_it = line.split(" ");
                 start_index += 1;
                 match cmd_it.next() {
@@ -68,7 +68,10 @@ fn process_input(input: &mut Vec<String>, a: i32, b: i32, c: i32, d: i32) -> i32
                         let offset = get_raw_or_registered_num(value, &a, &b, &c, &d);
                         let mut target_index = start_index - 1;
                         target_index += offset;
-                        let target_index = (target_index as usize) % input.len();
+                        let target_index = target_index as usize;
+                        if target_index >= input.len() {
+                            continue
+                        }
 
                         let line = match input.get(target_index) {
                             Some(l) => l,
@@ -112,7 +115,7 @@ fn process_input(input: &mut Vec<String>, a: i32, b: i32, c: i32, d: i32) -> i32
                             if offset == 0 {
                                 continue
                             }
-                            println!("jnz {} {}", value, offset);
+                            // println!("jnz {} {}", value, offset);
                             if offset > 0 {
                                 for _ in 0..offset-1 {
                                     start_index += 1;
