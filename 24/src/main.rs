@@ -34,4 +34,6 @@ fn main() {
 
     println!("{:?}", targets);
     println!("{:?}", start_pos);
+
+    println!("{:?}", astar::find_path(&grid, start_pos, (targets[1].0, targets[1].1)));
 }
