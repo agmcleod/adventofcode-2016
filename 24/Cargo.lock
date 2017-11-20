@@ -2,8 +2,13 @@
 name = "twentyfour"
 version = "0.1.0"
 dependencies = [
+ "astar 0.1.0",
  "read_input 0.1.0",
 ]
+
+[[package]]
+name = "astar"
+version = "0.1.0"
 
 [[package]]
 name = "read_input"
