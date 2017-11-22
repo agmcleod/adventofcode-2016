@@ -74,27 +74,17 @@ pub fn get_neighbours(pos: &(usize, usize), tiles: &Vec<Vec<TileType>>) -> Vec<(
 }
 
 pub fn find_path(tiles: &Vec<Vec<TileType>>, start_pos: (usize, usize), target: (usize, usize)) -> Vec<(usize, usize)> {
-    let mut closed: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
     let mut costs: HashMap<(usize, usize), usize> = HashMap::new();
     costs.insert(start_pos, 0);
 
     let mut heap = BinaryHeap::new();
     heap.push(Location{ position: start_pos, cost: 0 });
 
-    let mut tracked_positions: Vec<(usize, usize)> = Vec::new();
+    let mut closed: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+    closed.insert(start_pos, start_pos);
 
     while let Some(location) = heap.pop() {
         if location.position.0 == target.0 && location.position.1 == target.1 {
-            let mut pos = closed.get(&location.position).unwrap();
-            tracked_positions.push(location.position);
-            loop {
-                if let Some(p) = closed.get(&pos) {
-                    tracked_positions.push(*p);
-                    pos = p;
-                } else {
-                    break
-                }
-            }
             break
         }
         let neighbours = get_neighbours(&location.position, &tiles);
@@ -102,12 +92,26 @@ pub fn find_path(tiles: &Vec<Vec<TileType>>, start_pos: (usize, usize), target: 
             let new_cost = costs.get(&location.position).unwrap() + 1;
             if !costs.contains_key(&neighbour) || new_cost < *costs.get(&neighbour).unwrap() {
                 heap.push(Location{ position: neighbour, cost: new_cost + distance_to_target(&neighbour, &target) });
-                closed.insert(neighbour, location.position);
                 costs.insert(neighbour, new_cost);
+                closed.insert(neighbour, location.position);
             }
         }
     }
 
-    tracked_positions.reverse();
-    tracked_positions
+    let mut path: Vec<(usize, usize)> = Vec::new();
+
+    if closed.contains_key(&target) {
+        path.push(target);
+        let mut key = target;
+        loop {
+            let parent = closed.get(&key).unwrap();
+            if *parent == key {
+                break
+            }
+            path.push(*parent);
+            key = *parent;
+        }
+    }
+
+    path
 }
